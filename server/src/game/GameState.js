@@ -173,10 +173,25 @@ export function awardPoints(playerId, points = 1) {
   const player = players.get(playerId);
   if (player && player.isActive) {
     player.score += points;
-    console.log(`Player ${player.name} awarded ${points} points. Total score: ${player.score}`);
+    console.log(`🎯 Player ${player.name} awarded ${points} round kill(s). Round score: ${player.score}`);
     return true;
   }
   return false;
+}
+
+// Get round performance summary
+export function getRoundPerformanceSummary() {
+  const activePlayers = getAllPlayers().filter(p => p.isActive);
+  const totalKills = activePlayers.reduce((sum, p) => sum + p.score, 0);
+  const playersWithKills = activePlayers.filter(p => p.score > 0).length;
+  
+  return {
+    totalPlayers: activePlayers.length,
+    playersWithKills,
+    totalKills,
+    averageKills: activePlayers.length > 0 ? (totalKills / activePlayers.length).toFixed(1) : 0,
+    topScore: activePlayers.length > 0 ? Math.max(...activePlayers.map(p => p.score)) : 0
+  };
 }
 
 // Update player weapon status
@@ -256,13 +271,15 @@ export function startNewRound() {
   currentRound.isActive = true;
   
   // Reset all active players' scores
+  let resetCount = 0;
   getAllPlayers().forEach(player => {
     if (player.isActive) {
       player.score = 0;
+      resetCount++;
     }
   });
   
-  console.log(`🎮 Round ${currentRound.number} started with ${getActivePlayerCount()} players`);
+  console.log(`🎮 Round ${currentRound.number} started with ${getActivePlayerCount()} active players - ${resetCount} scores reset to 0`);
 }
 
 export function endCurrentRound() {
@@ -271,8 +288,12 @@ export function endCurrentRound() {
   currentRound.isActive = false;
   console.log(`🏁 Round ${currentRound.number} ended`);
   
-  // Log players eligible for rewards (including inactive players with kills)
+  // Log round performance and players eligible for rewards
+  const roundSummary = getRoundPerformanceSummary();
   const eligiblePlayers = getPlayersEligibleForRewards();
+  
+  console.log(`📊 Round ${currentRound.number} summary: ${roundSummary.totalKills} total kills by ${roundSummary.playersWithKills}/${roundSummary.totalPlayers} players (avg: ${roundSummary.averageKills}, top: ${roundSummary.topScore})`);
+  
   if (eligiblePlayers.length > 0) {
     console.log(`💰 Players eligible for rewards: ${eligiblePlayers.map(p => `${p.name} (${p.score} kills)`).join(', ')}`);
   } else {
@@ -338,5 +359,33 @@ export function getPlayerStateSummary() {
       isActive: currentRound.isActive,
       remainingTime: getRemainingTime()
     }
+  };
+}
+
+// Validate round kill tracking system
+export function validateRoundKillSystem() {
+  const issues = [];
+  const allPlayers = getAllPlayers();
+  
+  // Check if any players have negative scores
+  const negativeScores = allPlayers.filter(p => p.score < 0);
+  if (negativeScores.length > 0) {
+    issues.push(`Players with negative scores: ${negativeScores.map(p => p.name).join(', ')}`);
+  }
+  
+  // Check if inactive players are properly filtered from leaderboard
+  const leaderboard = getLeaderboard();
+  const inactiveInLeaderboard = leaderboard.filter(p => {
+    const player = players.get(p.id);
+    return player && !player.isActive;
+  });
+  if (inactiveInLeaderboard.length > 0) {
+    issues.push(`Inactive players in leaderboard: ${inactiveInLeaderboard.map(p => p.name).join(', ')}`);
+  }
+  
+  return {
+    isValid: issues.length === 0,
+    issues,
+    summary: getPlayerStateSummary()
   };
 }
