@@ -144,7 +144,7 @@
 - Add `endCurrentRound()` method that processes rewards and resets
 - Implement `getRemainingTime()` method to calculate time left
 - Add logic to prevent new rounds when no players connected
-- Track only `roundKills` in Player class (no lifetime scoring in Phase 2)
+- Track only `score` in Player class (no lifetime scoring in Phase 2)
 
 **Test**: Round starts when first player joins. No round runs when server is empty. Round timer counts down correctly.
 
@@ -155,7 +155,7 @@
 **Actions**:
 - Add `isActive` property to server Player class (separate from `isAlive`)
 - Modify `removePlayer()` in GameState to set `isActive: false` instead of deleting
-- Update `addPlayer()` to reactivate existing players and reset `roundKills` to 0
+- Update `addPlayer()` to reactivate existing players and reset `score` to 0
 - Filter inactive players from UI broadcasts and leaderboard display
 - Whoever has kills will get the round rewards
 - Maintain player data structure for potential reconnection within same round
@@ -167,10 +167,10 @@
 **Objective**: Track kill counts for current round only (no lifetime tracking in Phase 2).
 
 **Actions**:
-- Add `roundKills` property to Player class (resets each round)
-- Modify missile hit processing to increment `roundKills` for current round
-- Reset all players' `roundKills` to 0 when new round starts
-- Use `roundKills` for reward calculations and leaderboard display
+- Add `score` property to Player class (resets each round)
+- Modify missile hit processing to increment `score` for current round
+- Reset all players' `score` to 0 when new round starts
+- Use `score` for reward calculations and leaderboard display
 - Remove any existing `score` updates (will be handled in Phase 3)
 - Display only current round performance in UI
 
@@ -239,14 +239,14 @@
 **Actions**:
 - Define reward rate constant (e.g., 100 tokens per kill)
 - Add contract address constant (easily updateable for deployment)
-- Create `calculateRoundRewards()` method in GameState using `roundKills`
+- Create `calculateRoundRewards()` method in GameState using `score`
 - Integrate TokenMintService into round end processing
-- Distribute rewards only to players with `roundKills > 0`
+- Distribute rewards only to players with `score > 0`
 - Track successful/failed reward distributions
 - Add reward summary logging for each round
-- Clear all `roundKills` after reward distribution
+- Clear all `score` after reward distribution
 
-**Test**: Players receive correct token amounts (roundKills × reward rate) at round end. Round resets with all kills back to 0.
+**Test**: Players receive correct token amounts (score × reward rate) at round end. Round resets with all kills back to 0.
 
 ### Step 2.9: Client Reward Notifications
 
@@ -269,7 +269,7 @@
 
 **Actions**:
 - Send complete round state to new players on connection
-- Initialize joining players with `roundKills: 0` regardless of round progress
+- Initialize joining players with `score: 0` regardless of round progress
 - Allow players to earn rewards even if joining mid-round
 - Display appropriate UI state for round-in-progress vs waiting
 - Handle edge case of players joining during round transition
@@ -285,12 +285,12 @@
 - **Game State**: Function-based game state management in `server/src/game/GameState.js`
 - **Player Management**: Existing player object structure with wallet address support
 - **Networking**: Real-time position updates, weapon pickups, missile firing/hits
-- **Current Scoring**: `score` property exists but will be replaced with `roundKills` for Phase 2
+- **Current Scoring**: `score` property exists but will be replaced with `score` for Phase 2
 
 ### Key Integration Points
 1. **Player State Management**: 
    - Current `Player.js` already supports `walletAddress` property
-   - Need to add `roundKills` and `isActive` properties
+   - Need to add `score` and `isActive` properties
    - Existing validation functions can be extended
    - Remove dependency on existing `score` property for Phase 2
 
@@ -298,18 +298,18 @@
    - Current `getGameStateForBroadcast()` function needs round timer info
    - Existing tick system (20Hz) will handle round timer updates
    - Filter inactive players in broadcast data
-   - Display only `roundKills` in game state
+   - Display only `score` in game state
 
 3. **Leaderboard Integration**: 
    - Current `Leaderboard.js` shows `score` and `isAlive` status
-   - Replace with `roundKills` display and round timer
+   - Replace with `score` display and round timer
    - Show only current round performance (no lifetime stats)
 
 4. **Reward Distribution**: 
    - Replace existing `awardPoints()` with round kill tracking
    - Integrate reward distribution with round end logic
    - Use wallet addresses from player objects for token minting
-   - Clear `roundKills` after each round completion
+   - Clear `score` after each round completion
 
 ### Flow Testnet Specific Details
 - **Chain**: Flow Testnet
