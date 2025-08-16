@@ -2,6 +2,7 @@
 // Function-based game state management
 
 import { createPlayer, validatePlayerPosition, validatePlayerRotation, serializePlayer, validateWeapon } from './Player.js';
+import { initWeaponBoxes, getWeaponBoxesForBroadcast, collectWeaponBox, cleanup as cleanupWeaponBoxes } from './WeaponBox.js';
 
 // Game state
 let players = new Map();
@@ -14,7 +15,11 @@ export function initGameState() {
   players.clear();
   weaponBoxes.clear();
   gameStarted = false;
-  console.log('GameState initialized');
+  
+  // Initialize weapon pickup system
+  initWeaponBoxes();
+  
+  console.log('GameState initialized with weapon pickup system');
 }
 
 // Player management functions
@@ -86,11 +91,15 @@ export function getGameStateForBroadcast() {
   // Serialize all players for network transmission
   const serializedPlayers = getAllPlayers().map(player => serializePlayer(player));
   
+  // Include weapon pickup data
+  const weaponBoxData = getWeaponBoxesForBroadcast();
+  
   return {
     players: serializedPlayers,
     playerCount: getPlayerCount(),
     maxPlayers,
     gameStarted,
+    weaponBoxes: weaponBoxData,
     timestamp: Date.now()
   };
 }
@@ -143,9 +152,35 @@ export function getSerializedPlayer(playerId) {
   return player ? serializePlayer(player) : null;
 }
 
+// Handle weapon pickup collection
+export function handleWeaponPickupCollection(playerId, weaponBoxId) {
+  const player = players.get(playerId);
+  if (!player) {
+    return { success: false, reason: 'Player not found' };
+  }
+  
+  // Check if player already has a weapon
+  const playerHasWeapon = player.weapon !== null;
+  
+  // Attempt to collect the weapon box
+  const result = collectWeaponBox(weaponBoxId, playerId, playerHasWeapon);
+  
+  if (result.success) {
+    // Update player weapon state
+    player.weapon = result.weapon;
+    console.log(`Player ${player.name} collected weapon: ${result.weapon}`);
+  }
+  
+  return result;
+}
+
 export function resetGameState() {
   players.clear();
   weaponBoxes.clear();
   gameStarted = false;
+  
+  // Clean up weapon box system
+  cleanupWeaponBoxes();
+  
   console.log('Game state reset');
 }
