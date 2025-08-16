@@ -139,7 +139,8 @@
 - Implement game loop using requestAnimationFrame
 - Add methods for initialization, update, and render cycles
 - Integrate Scene.js into the game engine
-- Add basic FPS counter for performance monitoring
+- remove any fps code if manually added and use stats.js
+- also add orbitcontrols to the scene
 
 **Test:** Browser shows consistent frame rate counter and Three.js scene renders smoothly.
 
@@ -403,10 +404,9 @@
 
 **Actions:**
 - Add weapon inventory to both client and server Player classes
-- Implement weapon count tracking (missiles collected)
-- Add UI indicator showing current weapon count
+- Implement if the player has a weapon now or not
 - Synchronize weapon state across all clients
-- Handle weapon state during respawning
+- During respawning the player will have no weapon
 
 **Test:** Player weapon count updates correctly and is visible to all players.
 

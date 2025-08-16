@@ -2,6 +2,7 @@
 // Manages Three.js scene setup, lighting, camera, and rendering
 
 import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 export class Scene {
   constructor(canvas) {
@@ -9,6 +10,7 @@ export class Scene {
     this.scene = null;
     this.camera = null;
     this.renderer = null;
+    this.controls = null;
     this.groundPlane = null;
     this.arenaWalls = [];
     
@@ -20,6 +22,7 @@ export class Scene {
     this.setupRenderer();
     this.setupScene();
     this.setupCamera();
+    this.setupControls();
     this.setupLighting();
     this.setupArena();
     this.setupResizeHandler();
@@ -66,6 +69,25 @@ export class Scene {
     this.camera.lookAt(0, 0, 0);
     
     console.log('Camera initialized');
+  }
+
+  setupControls() {
+    // Set up OrbitControls for camera movement
+    this.controls = new OrbitControls(this.camera, this.canvas);
+    
+    // Configure controls
+    this.controls.enableDamping = true; // Smooth camera movement
+    this.controls.dampingFactor = 0.05;
+    this.controls.enableZoom = true;
+    this.controls.enableRotate = true;
+    this.controls.enablePan = true;
+    
+    // Set limits
+    this.controls.minDistance = 5;
+    this.controls.maxDistance = 100;
+    this.controls.maxPolarAngle = Math.PI / 2; // Prevent camera from going below ground
+    
+    console.log('OrbitControls initialized');
   }
 
   setupLighting() {
@@ -210,11 +232,19 @@ export class Scene {
 
   // Update method for any animations
   update(deltaTime) {
-    // No animations for now - keeping it simple
+    // Update controls for smooth camera movement
+    if (this.controls) {
+      this.controls.update();
+    }
   }
 
   // Cleanup method
   dispose() {
+    // Clean up controls
+    if (this.controls) {
+      this.controls.dispose();
+    }
+
     // Clean up geometries and materials
     this.scene.traverse((object) => {
       if (object.geometry) {
