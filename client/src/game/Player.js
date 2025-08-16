@@ -3,6 +3,7 @@
 
 import * as THREE from 'three';
 import { addObjectToScene, removeObjectFromScene } from './Scene.js';
+import { createMissile, generateMissileId } from './Missile.js';
 
 // Player class for client-side player management
 export class Player {
@@ -31,6 +32,7 @@ export class Player {
     this.score = 0;
     this.isAlive = true;
     this.weapon = null; // null or 'missile'
+    this.lastFiredTime = 0; // Track when player last fired to prevent server sync override
     
     // Step 5.3: Interpolation system for remote players
     this.interpolationBuffer = [];
@@ -331,23 +333,15 @@ export class Player {
   updateWeapon(weapon) {
     this.weapon = weapon;
     
-    // Remove existing weapon visual
-    if (this.weaponMesh) {
-      // Since weapon is child of car mesh, remove it from the car
-      this.mesh.remove(this.weaponMesh);
-      this.weaponMesh.geometry.dispose();
-      this.weaponMesh.material.dispose();
-      this.weaponMesh = null;
-    }
-    
     // Visual indication of weapon status
     if (this.mesh) {
       const material = this.mesh.material;
       if (weapon === 'missile') {
         material.emissive.setHex(0x444444); // Slight glow when armed
-        this.createWeaponVisual();
+        this.createWeaponVisual(); // Create or show weapon visual
       } else {
         material.emissive.setHex(0x000000); // No glow when unarmed
+        this.hideWeaponVisual(); // Hide weapon visual instead of removing
       }
     }
   }
@@ -355,21 +349,33 @@ export class Player {
   // Create visual weapon in front of player
   createWeaponVisual() {
     if (this.weapon === 'missile') {
-      // Create missile visual
-      const missileGeometry = new THREE.CylinderGeometry(0.1, 0.15, 1, 8);
-      const missileMaterial = new THREE.MeshLambertMaterial({
-        color: 0xff0000,
-        emissive: 0x220000
-      });
-      
-      this.weaponMesh = new THREE.Mesh(missileGeometry, missileMaterial);
-      
-      // Position weapon relative to car (local coordinates)
-      this.weaponMesh.position.set(0, 0.8, -1.8); // In front and above
-      this.weaponMesh.rotation.x = Math.PI / 2; // Point forward horizontally
-      
-      // Make weapon a child of the car mesh so it moves with it automatically
-      this.mesh.add(this.weaponMesh);
+      if (!this.weaponMesh) {
+        // Create missile visual only if it doesn't exist
+        const missileGeometry = new THREE.CylinderGeometry(0.1, 0.15, 1, 8);
+        const missileMaterial = new THREE.MeshLambertMaterial({
+          color: 0xff0000,
+          emissive: 0x220000
+        });
+        
+        this.weaponMesh = new THREE.Mesh(missileGeometry, missileMaterial);
+        
+        // Position weapon relative to car (local coordinates)
+        this.weaponMesh.position.set(0, 0.8, -1.8); // In front and above
+        this.weaponMesh.rotation.x = Math.PI / 2; // Point forward horizontally
+        
+        // Make weapon a child of the car mesh so it moves with it automatically
+        this.mesh.add(this.weaponMesh);
+      } else {
+        // Show existing weapon mesh
+        this.weaponMesh.visible = true;
+      }
+    }
+  }
+  
+  // Hide weapon visual instead of removing it
+  hideWeaponVisual() {
+    if (this.weaponMesh) {
+      this.weaponMesh.visible = false;
     }
   }
   
@@ -377,6 +383,55 @@ export class Player {
   updateWeaponPosition() {
     // Weapon is now a child of the car mesh, so it moves automatically
     // No manual position updates needed
+  }
+  
+  // Step 7.2: Fire missile (only for local player)
+  fireMissile() {
+    if (!this.isLocal) {
+      console.log('Only local player can fire missiles');
+      return null;
+    }
+    
+    if (this.weapon !== 'missile') {
+      console.log('Player does not have a missile to fire');
+      return null;
+    }
+    
+    // Calculate missile spawn position (in front of car)
+    const spawnOffset = new THREE.Vector3(0, 1, -2); // In front and slightly above
+    const worldSpawnOffset = spawnOffset.clone();
+    worldSpawnOffset.applyEuler(this.rotation);
+    
+    const missilePosition = this.position.clone().add(worldSpawnOffset);
+    
+    // Calculate missile direction (forward direction of car)
+    const missileDirection = new THREE.Vector3(0, 0, -1); // Forward in local space
+    missileDirection.applyEuler(this.rotation);
+    
+    // Generate unique missile ID
+    const missileId = generateMissileId(this.id);
+    
+    // Create local missile
+    const missile = createMissile(
+      this.id,           // shooter ID
+      missilePosition,   // spawn position
+      missileDirection,  // direction
+      true,             // isLocal = true
+      missileId         // missile ID
+    );
+    
+    // Remove weapon from player
+    this.lastFiredTime = Date.now();
+    this.updateWeapon(null);
+    
+    console.log(`🚀 Player ${this.name} fired missile ${missileId}`);
+    
+    return {
+      missileId: missileId,
+      position: missilePosition,
+      direction: missileDirection,
+      shooterId: this.id
+    };
   }
   
   // Update alive status
@@ -439,8 +494,14 @@ export class Player {
     }
     
     if (this.weaponMesh) {
-      // Weapon is child of car mesh, so it will be disposed with the car
-      // Just clean up the reference
+      // Properly dispose of weapon mesh resources
+      if (this.weaponMesh.geometry) {
+        this.weaponMesh.geometry.dispose();
+      }
+      if (this.weaponMesh.material) {
+        this.weaponMesh.material.dispose();
+      }
+      // Weapon is child of car mesh, so it will be removed with the car
       this.weaponMesh = null;
     }
     
@@ -566,9 +627,24 @@ export class PlayerManager {
         if (!isLocalPlayer) {
           // Only update position for remote players (local player is managed by client input)
           existingPlayer.updatePosition(serverPlayer.position, serverPlayer.rotation);
+          // Update weapon state for remote players
+          existingPlayer.updateWeapon(serverPlayer.weapon);
+        } else {
+          // For local player, only update weapon if server state is authoritative
+          // (like when collecting weapons or respawning)
+          const timeSinceFired = Date.now() - existingPlayer.lastFiredTime;
+          const recentlyFired = timeSinceFired < 1000; // 1 second protection after firing
+          
+          if (serverPlayer.weapon !== existingPlayer.weapon) {
+            // Only update if server says we should have a weapon but we don't,
+            // or if server says we shouldn't have a weapon and we're dead/respawning
+            // BUT don't override if we recently fired a missile
+            if ((serverPlayer.weapon === 'missile' && !recentlyFired) || !serverPlayer.isAlive) {
+              existingPlayer.updateWeapon(serverPlayer.weapon);
+            }
+          }
         }
         existingPlayer.updateScore(serverPlayer.score);
-        existingPlayer.updateWeapon(serverPlayer.weapon);
         existingPlayer.updateAliveStatus(serverPlayer.isAlive);
       } else {
         // Create new player

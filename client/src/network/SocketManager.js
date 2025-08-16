@@ -2,6 +2,7 @@
 // Simple function-based socket connection with retry
 
 import { io } from 'socket.io-client';
+import { createMissile } from '../game/Missile.js';
 
 let socket = null;
 let isConnected = false;
@@ -79,6 +80,21 @@ export function initWebSocket() {
   // Step 6.3: Listen for weapon pickup collection responses
   socket.on('weaponPickupResponse', (data) => {
     handleWeaponPickupResponse(data);
+  });
+  
+  // Step 7.2: Listen for missile spawn events
+  socket.on('missileSpawned', (data) => {
+    handleMissileSpawned(data);
+  });
+  
+  // Step 7.4: Listen for player elimination events
+  socket.on('playerEliminated', (data) => {
+    handlePlayerEliminated(data);
+  });
+  
+  // Step 7.4: Listen for player respawn events
+  socket.on('playerRespawned', (data) => {
+    handlePlayerRespawned(data);
   });
 }
 
@@ -177,6 +193,46 @@ export function sendWeaponPickupCollection(weaponBoxId) {
   return true;
 }
 
+// Step 7.2: Send missile fire event to server
+export function sendMissileFire(missileData) {
+  if (!socket || !isConnected) {
+    console.log('Cannot send missile fire - not connected to server');
+    return false;
+  }
+  
+  const fireData = {
+    missileId: missileData.missileId,
+    shooterId: missileData.shooterId,
+    position: missileData.position,
+    direction: missileData.direction,
+    timestamp: Date.now()
+  };
+  
+  socket.emit('missileFire', fireData);
+  console.log(`🚀 Sent missile fire event for missile ${missileData.missileId}`);
+  return true;
+}
+
+// Step 7.4: Send missile hit report to server
+export function sendMissileHit(hitData) {
+  if (!socket || !isConnected) {
+    console.log('Cannot send missile hit - not connected to server');
+    return false;
+  }
+  
+  const hitReport = {
+    missileId: hitData.missileId,
+    shooterId: hitData.shooterId,
+    targetId: hitData.playerId,
+    hitPosition: hitData.hitPosition,
+    timestamp: Date.now()
+  };
+  
+  socket.emit('missileHit', hitReport);
+  console.log(`💥 Sent missile hit report: ${hitData.missileId} hit player ${hitData.playerId}`);
+  return true;
+}
+
 // Step 5.2: Game state receiving functions
 export function setGameStateCallback(callback) {
   gameStateCallback = callback;
@@ -212,6 +268,42 @@ function handleWeaponPickupResponse(data) {
     console.log(`❌ Weapon pickup collection failed: ${reason} (box ${weaponBoxId})`);
     // The pickup will be shown again via game state sync if collection failed
   }
+}
+
+// Step 7.2: Handle missile spawn events from server
+function handleMissileSpawned(data) {
+  const { missileId, shooterId, position, direction } = data;
+  
+  console.log(`🚀 Received missile spawn: ${missileId} from player ${shooterId}`);
+  
+  // Create remote missile (not local, so no hit detection)
+  createMissile(
+    shooterId,        // shooter ID
+    position,         // spawn position
+    direction,        // direction
+    false,           // isLocal = false (remote missile, visual only)
+    missileId        // missile ID from server
+  );
+}
+
+// Step 7.4: Handle player elimination events from server
+function handlePlayerEliminated(data) {
+  const { shooterId, targetId, hitPosition } = data;
+  
+  console.log(`💀 Player elimination: ${targetId} eliminated by ${shooterId}`);
+  
+  // Player state will be updated via game state broadcast
+  // The elimination is mainly for visual/audio feedback
+}
+
+// Step 7.4: Handle player respawn events from server
+function handlePlayerRespawned(data) {
+  const { playerId } = data;
+  
+  console.log(`✨ Player respawned: ${playerId}`);
+  
+  // Player state will be updated via game state broadcast
+  // The respawn is mainly for visual/audio feedback
 }
 
 // Get game state receiving statistics
