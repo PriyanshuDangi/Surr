@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Surr - Multiplayer Kart Arena</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            overflow: hidden;
+            color: #ffffff;
+        }
+
+        #gameCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* UI Overlays */
+        .ui-overlay {
+            position: absolute;
+            z-index: 1000;
+            pointer-events: none;
+        }
+
+        .ui-overlay * {
+            pointer-events: auto;
+        }
+
+        /* Leaderboard */
+        #leaderboard {
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid #4a90e2;
+            border-radius: 10px;
+            padding: 15px;
+            min-width: 200px;
+            backdrop-filter: blur(10px);
+        }
+
+        #leaderboard h3 {
+            color: #4a90e2;
+            margin-bottom: 10px;
+            text-align: center;
+            font-size: 16px;
+        }
+
+        .leaderboard-entry {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+            padding: 5px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .leaderboard-entry.current-player {
+            background: rgba(74, 144, 226, 0.3);
+            border: 1px solid #4a90e2;
+        }
+
+        /* Controls Info */
+        #controlsInfo {
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid #e74c3c;
+            border-radius: 10px;
+            padding: 15px;
+            backdrop-filter: blur(10px);
+        }
+
+        #controlsInfo h3 {
+            color: #e74c3c;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .control-item {
+            margin: 5px 0;
+            font-size: 12px;
+        }
+
+        .control-key {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid #666;
+            border-radius: 3px;
+            padding: 2px 6px;
+            font-family: monospace;
+            font-weight: bold;
+            min-width: 25px;
+            text-align: center;
+        }
+
+        /* Game HUD */
+        #gameHUD {
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid #2ecc71;
+            border-radius: 10px;
+            padding: 15px;
+            backdrop-filter: blur(10px);
+        }
+
+        .hud-item {
+            margin: 8px 0;
+            font-size: 14px;
+        }
+
+        .hud-label {
+            color: #2ecc71;
+            font-weight: bold;
+        }
+
+        .hud-value {
+            color: #ffffff;
+            margin-left: 10px;
+        }
+
+        /* Connection Status */
+        #connectionStatus {
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            border: 2px solid #f39c12;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .status-connected {
+            border-color: #2ecc71 !important;
+        }
+
+        .status-disconnected {
+            border-color: #e74c3c !important;
+        }
+
+        /* Hidden by default */
+        .hidden {
+            display: none !important;
+        }
+
+        /* Loading indicator */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #4a90e2;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            #leaderboard, #controlsInfo, #gameHUD {
+                font-size: 12px;
+                padding: 10px;
+            }
+
+            .ui-overlay {
+                top: 10px;
+                right: 10px;
+                left: 10px;
+                bottom: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Game Canvas -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- UI Overlays -->
+    <!-- Leaderboard -->
+    <div id="leaderboard" class="ui-overlay">
+        <h3>🏆 Leaderboard</h3>
+        <div id="leaderboardContent">
+            <div class="leaderboard-entry">
+                <span>Loading...</span>
+                <span>-</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game HUD -->
+    <div id="gameHUD" class="ui-overlay">
+        <div class="hud-item">
+            <span class="hud-label">FPS:</span>
+            <span class="hud-value" id="fpsCounter">--</span>
+        </div>
+        <div class="hud-item">
+            <span class="hud-label">Ping:</span>
+            <span class="hud-value" id="pingCounter">--</span>
+        </div>
+        <div class="hud-item">
+            <span class="hud-label">Missiles:</span>
+            <span class="hud-value" id="missileCounter">0</span>
+        </div>
+        <div class="hud-item">
+            <span class="hud-label">Score:</span>
+            <span class="hud-value" id="scoreCounter">0</span>
+        </div>
+    </div>
+
+    <!-- Controls Info -->
+    <div id="controlsInfo" class="ui-overlay">
+        <h3>🎮 Controls</h3>
+        <div class="control-item">
+            <span class="control-key">W</span> / <span class="control-key">↑</span> Accelerate
+        </div>
+        <div class="control-item">
+            <span class="control-key">S</span> / <span class="control-key">↓</span> Brake/Reverse
+        </div>
+        <div class="control-item">
+            <span class="control-key">A</span> / <span class="control-key">←</span> Turn Left
+        </div>
+        <div class="control-item">
+            <span class="control-key">D</span> / <span class="control-key">→</span> Turn Right
+        </div>
+        <div class="control-item">
+            <span class="control-key">SPACE</span> Fire Missile
+        </div>
+    </div>
+
+    <!-- Connection Status (hidden by default) -->
+    <div id="connectionStatus" class="ui-overlay hidden">
+        <h3>Connection Status</h3>
+        <p id="connectionMessage">Connecting to server...</p>
+        <div class="loading"></div>
+    </div>
+
+    <!-- Game Script -->
+    <script type="module" src="/src/main.js"></script>
+</body>
+</html>
