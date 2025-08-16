@@ -106,7 +106,6 @@ function setupArena() {
   scene.add(groundPlane);
 
   createArenaWalls();
-  addReferenceObjects();
   
   console.log('Arena setup complete');
 }
@@ -138,15 +137,6 @@ function createArenaWalls() {
     arenaWalls.push(wall);
     scene.add(wall);
   });
-}
-
-function addReferenceObjects() {
-  const centerGeometry = new THREE.SphereGeometry(1, 16, 16);
-  const centerMaterial = new THREE.MeshLambertMaterial({ color: 0xff6b6b });
-  const centerSphere = new THREE.Mesh(centerGeometry, centerMaterial);
-  centerSphere.position.set(0, 1, 0);
-  centerSphere.castShadow = true;
-  scene.add(centerSphere);
 }
 
 function setupResizeHandler() {
