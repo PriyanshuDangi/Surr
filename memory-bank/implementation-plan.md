@@ -112,7 +112,7 @@
 **Actions:**
 - Create `client/index.html` with basic structure
 - Add canvas element for Three.js rendering
-- Add basic CSS for full-screen game view
+- Add basic CSS for full-screen game view, create a seprate css file for this
 - Include div elements for UI overlays (leaderboard, controls info)
 - Configure Vite to serve this HTML file
 
