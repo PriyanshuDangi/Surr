@@ -9,6 +9,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { initSocketHandler, handleConnection, cleanup } from './network/SocketHandler.js';
 import { initGameState } from './game/GameState.js';
+import config from './config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,12 +17,12 @@ const __dirname = path.dirname(__filename);
 // Initialize Express app and HTTP server
 const app = express();
 const server = createServer(app);
-const PORT = 5173;
+const PORT = config.port;
 
 // Initialize Socket.IO
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:3000",
+    origin: config.corsOrigins,
     methods: ["GET", "POST"],
     credentials: true
   }
@@ -29,7 +30,7 @@ const io = new Server(server, {
 
 // Configure middleware
 app.use(cors({
-  origin: "http://localhost:3000",
+  origin: config.corsOrigins,
   methods: ["GET", "POST"],
   credentials: true
 }));

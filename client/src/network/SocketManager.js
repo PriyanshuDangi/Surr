@@ -3,6 +3,7 @@
 
 import { io } from 'socket.io-client';
 import { createMissile } from '../game/Missile.js';
+import config from '../config.js';
 
 let socket = null;
 let isConnected = false;
@@ -24,9 +25,9 @@ let connectionCallbacks = [];
 let disconnectionCallbacks = [];
 
 export function initWebSocket() {
-  const serverUrl = 'http://localhost:5173';
+  const serverUrl = config.serverUrl;
   
-  console.log('Connecting to server...');
+  console.log('Connecting to server:', serverUrl);
   
   socket = io(serverUrl, {
     transports: ['websocket', 'polling'],
