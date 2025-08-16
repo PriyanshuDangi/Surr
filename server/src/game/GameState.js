@@ -3,6 +3,8 @@
 
 import { createPlayer, validatePlayerPosition, validatePlayerRotation, serializePlayer, validateWeapon } from './Player.js';
 import { initWeaponBoxes, getWeaponBoxesForBroadcast, collectWeaponBox, cleanup as cleanupWeaponBoxes } from './WeaponBox.js';
+import TokenMintService from '../web3/TokenMintService.js';
+import FLOW_CONFIG from '../config/flow.js';
 
 // Game state
 let players = new Map();
@@ -11,12 +13,16 @@ let gameStarted = false;
 const maxPlayers = 6;
 
 // Round management
-const ROUND_DURATION = 3 * 60 * 1000; // 3 minutes in milliseconds
+const ROUND_DURATION = FLOW_CONFIG.ROUND_DURATION; // 3 minutes in milliseconds
 let currentRound = {
   number: 0,
   startTime: null,
   isActive: false
 };
+
+// Reward distribution system
+let tokenMintService = null;
+let rewardDistributionHistory = [];
 
 // Initialize game state
 export function initGameState() {
@@ -31,10 +37,16 @@ export function initGameState() {
     isActive: false
   };
   
+  // Initialize token minting service
+  if (!tokenMintService) {
+    tokenMintService = new TokenMintService();
+    console.log('TokenMintService instance created for reward distribution');
+  }
+  
   // Initialize weapon pickup system
   initWeaponBoxes();
   
-  console.log('GameState initialized with weapon pickup system');
+  console.log('GameState initialized with weapon pickup system and reward distribution');
 }
 
 // Player management functions
@@ -89,7 +101,9 @@ export function removePlayer(playerId) {
     
     // End round if no active players remain
     if (getActivePlayerCount() === 0 && currentRound.isActive) {
-      endCurrentRound();
+      endCurrentRound().catch(error => {
+        console.error('Error ending round:', error);
+      });
     }
     return true;
   }
@@ -292,7 +306,7 @@ export function startNewRound() {
   };
 }
 
-export function endCurrentRound() {
+export async function endCurrentRound() {
   if (!currentRound.isActive) return;
   
   currentRound.isActive = false;
@@ -310,7 +324,11 @@ export function endCurrentRound() {
     console.log(`💰 No players eligible for rewards this round`);
   }
   
-  // TODO: Calculate and distribute rewards in Phase 2.8
+  // Calculate and distribute rewards
+  const rewardResult = await calculateAndDistributeRoundRewards();
+  
+  // Clear all player scores after reward distribution
+  clearAllPlayerScores();
   
   // Return round end event data for broadcasting
   return {
@@ -334,17 +352,21 @@ export function getRemainingTime() {
   return remaining;
 }
 
-export function checkRoundTimer() {
+export async function checkRoundTimer() {
   const events = [];
   
   if (currentRound.isActive && getRemainingTime() <= 0) {
-    const endEvent = endCurrentRound();
-    if (endEvent) events.push(endEvent);
-    
-    // Start new round if players are still active
-    if (getActivePlayerCount() > 0) {
-      const startEvent = startNewRound();
-      if (startEvent) events.push(startEvent);
+    try {
+      const endEvent = await endCurrentRound();
+      if (endEvent) events.push(endEvent);
+      
+      // Start new round if players are still active
+      if (getActivePlayerCount() > 0) {
+        const startEvent = startNewRound();
+        if (startEvent) events.push(startEvent);
+      }
+    } catch (error) {
+      console.error('Error in round timer:', error);
     }
   }
   
@@ -414,5 +436,218 @@ export function validateRoundKillSystem() {
     isValid: issues.length === 0,
     issues,
     summary: getPlayerStateSummary()
+  };
+}
+
+// Reward Distribution System Functions
+
+/**
+ * Calculate round rewards for all eligible players
+ * @returns {Array} Array of reward calculations
+ */
+export function calculateRoundRewards() {
+  const eligiblePlayers = getPlayersEligibleForRewards();
+  const rewardCalculations = [];
+  
+  console.log(`🧮 Calculating rewards for ${eligiblePlayers.length} eligible players...`);
+  
+  for (const player of eligiblePlayers) {
+    if (!player.walletAddress) {
+      console.warn(`⚠️  Player ${player.name} has no wallet address - skipping reward`);
+      continue;
+    }
+    
+    const tokensToMint = player.score * FLOW_CONFIG.REWARD_RATE;
+    
+    rewardCalculations.push({
+      playerId: player.id,
+      playerName: player.name,
+      walletAddress: player.walletAddress,
+      kills: player.score,
+      tokensToMint,
+      isActive: player.isActive
+    });
+    
+    console.log(`💰 ${player.name}: ${player.score} kills × ${FLOW_CONFIG.REWARD_RATE} = ${tokensToMint} SURR tokens`);
+  }
+  
+  return rewardCalculations;
+}
+
+/**
+ * Distribute rewards to players using TokenMintService
+ * @param {Array} rewardCalculations - Array of reward calculations
+ * @returns {Object} Distribution results
+ */
+export async function distributeRewards(rewardCalculations) {
+  if (!tokenMintService) {
+    console.error('❌ TokenMintService not initialized');
+    return { successful: [], failed: rewardCalculations.map(r => ({ ...r, error: 'Service not initialized' })) };
+  }
+  
+  if (rewardCalculations.length === 0) {
+    console.log('💰 No rewards to distribute this round');
+    return { successful: [], failed: [] };
+  }
+  
+  console.log(`🚀 Starting reward distribution for ${rewardCalculations.length} players...`);
+  
+  // Prepare batch mint requests
+  const mintRequests = rewardCalculations.map(reward => ({
+    address: reward.walletAddress,
+    amount: reward.tokensToMint
+  }));
+  
+  try {
+    // Use batch minting for efficiency
+    const batchResult = await tokenMintService.batchMintTokens(mintRequests);
+    
+    // Map results back to player information
+    const successful = batchResult.successful.map((result, index) => ({
+      ...rewardCalculations.find(r => r.walletAddress === result.recipient),
+      transactionHash: result.transactionHash,
+      gasUsed: result.gasUsed,
+      blockNumber: result.blockNumber
+    }));
+    
+    const failed = batchResult.failed.map(failure => {
+      const reward = rewardCalculations.find(r => r.walletAddress === failure.address);
+      return {
+        ...reward,
+        error: failure.error
+      };
+    });
+    
+    // Log distribution summary
+    console.log(`🏁 Reward distribution completed:`);
+    console.log(`   ✅ Successful: ${successful.length}`);
+    console.log(`   ❌ Failed: ${failed.length}`);
+    
+    if (successful.length > 0) {
+      const totalTokens = successful.reduce((sum, r) => sum + r.tokensToMint, 0);
+      console.log(`   💰 Total tokens distributed: ${totalTokens} SURR`);
+    }
+    
+    return { successful, failed };
+    
+  } catch (error) {
+    console.error('❌ Batch reward distribution failed:', error.message);
+    return { 
+      successful: [], 
+      failed: rewardCalculations.map(r => ({ ...r, error: error.message }))
+    };
+  }
+}
+
+/**
+ * Calculate and distribute round rewards (main function)
+ * @returns {Object} Complete reward distribution results
+ */
+export async function calculateAndDistributeRoundRewards() {
+  const roundNumber = currentRound.number;
+  const timestamp = Date.now();
+  
+  console.log(`💰 Starting reward calculation and distribution for Round ${roundNumber}...`);
+  
+  // Calculate rewards
+  const rewardCalculations = calculateRoundRewards();
+  
+  if (rewardCalculations.length === 0) {
+    const result = {
+      roundNumber,
+      timestamp,
+      calculations: [],
+      distribution: { successful: [], failed: [] },
+      summary: {
+        totalPlayers: 0,
+        totalKills: 0,
+        totalTokensDistributed: 0,
+        successfulDistributions: 0,
+        failedDistributions: 0
+      }
+    };
+    
+    rewardDistributionHistory.push(result);
+    return result;
+  }
+  
+  // Distribute rewards
+  const distribution = await distributeRewards(rewardCalculations);
+  
+  // Calculate summary
+  const totalKills = rewardCalculations.reduce((sum, r) => sum + r.kills, 0);
+  const totalTokensDistributed = distribution.successful.reduce((sum, r) => sum + r.tokensToMint, 0);
+  
+  const result = {
+    roundNumber,
+    timestamp,
+    calculations: rewardCalculations,
+    distribution,
+    summary: {
+      totalPlayers: rewardCalculations.length,
+      totalKills,
+      totalTokensDistributed,
+      successfulDistributions: distribution.successful.length,
+      failedDistributions: distribution.failed.length
+    }
+  };
+  
+  // Store in history
+  rewardDistributionHistory.push(result);
+  
+  // Log final summary
+  console.log(`🎯 Round ${roundNumber} reward summary:`);
+  console.log(`   👥 Players: ${result.summary.totalPlayers}`);
+  console.log(`   🔫 Kills: ${result.summary.totalKills}`);
+  console.log(`   💰 Tokens distributed: ${result.summary.totalTokensDistributed} SURR`);
+  console.log(`   ✅ Successful: ${result.summary.successfulDistributions}`);
+  console.log(`   ❌ Failed: ${result.summary.failedDistributions}`);
+  
+  return result;
+}
+
+/**
+ * Clear all player scores after reward distribution
+ */
+export function clearAllPlayerScores() {
+  let clearedCount = 0;
+  getAllPlayers().forEach(player => {
+    if (player.score > 0) {
+      player.score = 0;
+      clearedCount++;
+    }
+  });
+  
+  console.log(`🧹 Cleared scores for ${clearedCount} players after reward distribution`);
+}
+
+/**
+ * Get reward distribution history
+ * @param {number} limit - Number of recent rounds to return
+ * @returns {Array} Array of reward distribution results
+ */
+export function getRewardDistributionHistory(limit = 10) {
+  return rewardDistributionHistory.slice(-limit);
+}
+
+/**
+ * Get reward system status
+ * @returns {Object} Current status of reward system
+ */
+export function getRewardSystemStatus() {
+  return {
+    tokenMintService: {
+      initialized: tokenMintService !== null,
+      status: tokenMintService ? tokenMintService.getStatus() : null
+    },
+    config: {
+      rewardRate: FLOW_CONFIG.REWARD_RATE,
+      roundDuration: FLOW_CONFIG.ROUND_DURATION,
+      minPlayersForRound: FLOW_CONFIG.MIN_PLAYERS_FOR_ROUND
+    },
+    history: {
+      totalRounds: rewardDistributionHistory.length,
+      recentRounds: getRewardDistributionHistory(5)
+    }
   };
 }
