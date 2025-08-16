@@ -3,6 +3,7 @@
 
 import { initScene, updateScene, renderScene, disposeScene } from './Scene.js';
 import { initWebSocket, isSocketConnected } from '../network/SocketManager.js';
+import { playerManager } from './Player.js';
 import Stats from 'stats.js';
 
 // Game state
@@ -37,6 +38,9 @@ export async function initGameEngine() {
 
     // Initialize websocket
     initWebSocket();
+    
+    // Create test local player to verify Player class functionality
+    createTestPlayer();
     
     // Setup game loop
     setupGameLoop();
@@ -115,11 +119,43 @@ export function disposeGameEngine() {
   }
 }
 
+// Create test player for Step 4.1 verification
+function createTestPlayer() {
+  try {
+    // Create a local test player at arena center
+    const testPlayer = playerManager.createPlayer(
+      'test-local-player',
+      'TestPlayer',
+      { x: 0, y: 1, z: 0 },
+      true // isLocal = true
+    );
+    
+    // Create a remote test player for comparison
+    const remotePlayer = playerManager.createPlayer(
+      'test-remote-player',
+      'RemotePlayer',
+      { x: 5, y: 1, z: 5 },
+      false // isLocal = false
+    );
+    
+    console.log('Test players created successfully');
+    console.log('Local player (green cube):', testPlayer.name);
+    console.log('Remote player (orange cube):', remotePlayer.name);
+    
+    return { testPlayer, remotePlayer };
+  } catch (error) {
+    console.error('Failed to create test players:', error);
+    return null;
+  }
+}
+
 // Get debug information
 export function getDebugInfo() {
   return {
     deltaTime,
     isRunning,
-    socketConnected: isSocketConnected()
+    socketConnected: isSocketConnected(),
+    playersCount: playerManager.getAllPlayers().length,
+    localPlayer: playerManager.getLocalPlayer()?.name || 'None'
   };
 }
