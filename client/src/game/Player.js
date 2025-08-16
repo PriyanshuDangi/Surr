@@ -80,28 +80,48 @@ export class Player {
   
   // Create name tag above player
   createNameTag() {
+    this.updateNameTagTexture();
+  }
+  
+  // Update name tag texture 
+  updateNameTagTexture() {
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
     canvas.width = 256;
     canvas.height = 64;
     
-    // Draw name tag
+    // Draw background
     context.fillStyle = 'rgba(0, 0, 0, 0.8)';
     context.fillRect(0, 0, canvas.width, canvas.height);
     
+    // Draw border
+    context.strokeStyle = this.isLocal ? '#4CAF50' : '#FF5722';
+    context.lineWidth = 2;
+    context.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
+    
+    // Draw player name
     context.fillStyle = 'white';
     context.font = '24px Arial';
     context.textAlign = 'center';
     context.fillText(this.name, canvas.width / 2, canvas.height / 2 + 8);
     
-    const texture = new THREE.CanvasTexture(canvas);
-    const material = new THREE.SpriteMaterial({ map: texture });
-    this.nameTag = new THREE.Sprite(material);
-    this.nameTag.scale.set(4, 1, 1);
-    this.nameTag.position.copy(this.position);
-    this.nameTag.position.y += 3; // Position above the kart
-    
-    addObjectToScene(this.nameTag);
+    // Create or update texture
+    if (this.nameTag) {
+      // Update existing texture
+      const texture = new THREE.CanvasTexture(canvas);
+      this.nameTag.material.map = texture;
+      this.nameTag.material.needsUpdate = true;
+    } else {
+      // Create new name tag
+      const texture = new THREE.CanvasTexture(canvas);
+      const material = new THREE.SpriteMaterial({ map: texture });
+      this.nameTag = new THREE.Sprite(material);
+      this.nameTag.scale.set(4, 1, 1);
+      this.nameTag.position.copy(this.position);
+      this.nameTag.position.y += 3; // Position above the kart
+      
+      addObjectToScene(this.nameTag);
+    }
   }
   
   // Update player position in scene

@@ -2,7 +2,7 @@
 // Function-based game controller that manages the game loop and coordination
 
 import { initScene, updateScene, renderScene, disposeScene, getCamera } from './Scene.js';
-import { initWebSocket, isSocketConnected, broadcastPlayerPosition, setGameStateCallback, addConnectionCallback, addDisconnectionCallback, sendWeaponPickupCollection, sendMissileFire, sendMissileHit, setEliminationCallback, setRespawnCallback } from '../network/SocketManager.js';
+import { initWebSocket, isSocketConnected, broadcastPlayerPosition, setGameStateCallback, addConnectionCallback, addDisconnectionCallback, sendWeaponPickupCollection, sendMissileFire, sendMissileHit, setEliminationCallback, setRespawnCallback, setLeaderboardCallback } from '../network/SocketManager.js';
 import { playerManager } from './Player.js';
 import { initControls, getInputState, isMoving, disposeControls } from './Controls.js';
 import { initWelcomeScreen, updateConnectionStatus, hideWelcomeScreen, isWelcomeScreenShown, getPlayerName, getLocalPlayerId, handleDisconnection } from '../ui/WelcomeScreen.js';
@@ -10,6 +10,7 @@ import { initNotifications, showWelcomeNotification, showPlayerJoinedNotificatio
 import { initWeaponPickups, updateWeaponPickups, animateWeaponPickups, disposeWeaponPickups, checkWeaponPickupCollisions, attemptLocalPickupCollection } from './WeaponPickups.js';
 import { initMissileSystem, updateMissiles, disposeMissileSystem, setMissileHitCallback } from './Missile.js';
 import { initRespawnTimer, showRespawnTimer, hideRespawnTimer, disposeRespawnTimer } from '../ui/RespawnTimer.js';
+import { initLeaderboard, updateLeaderboard, setLocalPlayerId, disposeLeaderboard } from '../ui/Leaderboard.js';
 import Stats from 'stats.js';
 import * as THREE from 'three';
 
@@ -66,6 +67,9 @@ export async function initGameEngine() {
     // Step 8.3: Initialize respawn timer system
     initRespawnTimer();
     
+    // Step 9.3: Initialize leaderboard system
+    initLeaderboard();
+    
     // Initialize websocket
     initWebSocket();
     
@@ -90,6 +94,9 @@ export async function initGameEngine() {
     // Step 8.3: Set up elimination and respawn callbacks
     setEliminationCallback(handlePlayerElimination);
     setRespawnCallback(handlePlayerRespawn);
+    
+    // Step 9.3: Set up leaderboard callback
+    setLeaderboardCallback(handleLeaderboardUpdate);
     
     // Don't create test player immediately - wait for user to join
     // createTestPlayer();
@@ -341,6 +348,9 @@ export function disposeGameEngine() {
   // Dispose respawn timer (Step 8.3)
   disposeRespawnTimer();
   
+  // Dispose leaderboard (Step 9.3)
+  disposeLeaderboard();
+  
   // Dispose scene and stats
   disposeScene();
 
@@ -453,6 +463,16 @@ function handlePlayerRespawn(data) {
   console.log(`✨ Player respawned: ${playerName} at position (${spawnPosition.x}, ${spawnPosition.z})`);
   
   // TODO: Add respawn effects (particles, flash, etc.)
+}
+
+// Step 9.3: Handle leaderboard updates
+function handleLeaderboardUpdate(leaderboardData) {
+  const localPlayerId = getLocalPlayerId();
+  
+  console.log(`📊 Updating leaderboard with ${leaderboardData.length} players`);
+  
+  // Update the leaderboard display
+  updateLeaderboard(leaderboardData, localPlayerId);
 }
 
 // Step 5.3: Export function for debugging interpolation in browser console
