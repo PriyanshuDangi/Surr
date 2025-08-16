@@ -245,7 +245,6 @@ export function setGameStateCallback(callback) {
 }
 
 function handleGameState(gameState) {
-  console.log('handleGameState', gameState);
   gameStateStats.receivedCount++;
   const now = performance.now();
   
