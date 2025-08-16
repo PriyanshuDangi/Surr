@@ -16,7 +16,16 @@ export class Player {
     this.position = new THREE.Vector3(position.x, position.y, position.z);
     this.rotation = new THREE.Euler(0, 0, 0);
     this.speed = 0; // Current movement speed as a number
+     
+    // Movement configuration
     this.maxSpeed = 15; // Maximum speed
+    this.acceleration = 25; // Acceleration rate
+    this.deceleration = 20; // Deceleration rate
+    this.turnSpeed = 3.5; // Turning speed in radians per second
+    
+    // Movement state
+    this.targetSpeed = 0; // Target speed for smooth acceleration
+    this.direction = new THREE.Vector3(); // Movement direction vector
     
     // Game state properties
     this.score = 0;
@@ -111,6 +120,61 @@ export class Player {
   // Update player speed
   updateSpeed(speed) {
     this.speed = speed;
+  }
+  
+  // Update player movement based on input (Step 4.3)
+  updateMovement(inputState, deltaTime) {
+    if (!this.isLocal || !this.isAlive) return;
+    
+    // Handle turning
+    let turnDirection = 0;
+    if (inputState.left) turnDirection += 1;  // Turn left (positive rotation)
+    if (inputState.right) turnDirection -= 1; // Turn right (negative rotation)
+    
+    // Apply turning
+    this.rotation.y += turnDirection * this.turnSpeed * deltaTime;
+    
+    // Handle forward/backward movement
+    let moveDirection = 0;
+    if (inputState.forward) moveDirection = 1;
+    if (inputState.backward) moveDirection = -0.6; // Slower reverse
+    
+    // Set target speed based on input
+    this.targetSpeed = moveDirection * this.maxSpeed;
+    
+    // Smooth acceleration/deceleration
+    const speedDiff = this.targetSpeed - this.speed;
+    const rate = speedDiff > 0 ? this.acceleration : this.deceleration;
+    this.speed += Math.sign(speedDiff) * Math.min(Math.abs(speedDiff), rate * deltaTime);
+    
+    // Calculate movement direction based on rotation
+    this.direction.set(0, 0, -1); // Forward direction
+    this.direction.applyEuler(this.rotation);
+    this.direction.normalize();
+    
+    // Apply movement
+    const movement = this.direction.clone().multiplyScalar(this.speed * deltaTime);
+    this.position.add(movement);
+    
+    // Keep player on ground level
+    this.position.y = 1;
+    
+    // Apply arena boundaries (100x100 arena)
+    const boundary = 48; // Slightly smaller than arena size
+    this.position.x = Math.max(-boundary, Math.min(boundary, this.position.x));
+    this.position.z = Math.max(-boundary, Math.min(boundary, this.position.z));
+    
+    // Update mesh position and rotation
+    if (this.mesh) {
+      this.mesh.position.copy(this.position);
+      this.mesh.rotation.copy(this.rotation);
+    }
+    
+    // Update name tag position
+    if (this.nameTag) {
+      this.nameTag.position.copy(this.position);
+      this.nameTag.position.y += 3;
+    }
   }
   
   // Update weapon state

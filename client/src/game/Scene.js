@@ -2,16 +2,15 @@
 // Function-based scene management for Three.js rendering
 
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 // Scene state
 let canvas = null;
 let scene = null;
 let camera = null;
 let renderer = null;
-let controls = null;
 let groundPlane = null;
 let arenaWalls = [];
+let localCarTarget = null; // Target position for camera to follow
 
 // Initialize the scene
 export function initScene(canvasElement) {
@@ -22,7 +21,6 @@ export function initScene(canvasElement) {
   setupRenderer();
   setupScene();
   setupCamera();
-  setupControls();
   setupLighting();
   setupArena();
   setupResizeHandler();
@@ -60,26 +58,11 @@ function setupCamera() {
     1000
   );
   
-  camera.position.set(0, 25, 30);
+  // Set initial camera position behind and above the spawn point
+  camera.position.set(0, 15, 20);
   camera.lookAt(0, 0, 0);
   
   console.log('Camera initialized');
-}
-
-function setupControls() {
-  controls = new OrbitControls(camera, canvas);
-  
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.05;
-  controls.enableZoom = true;
-  controls.enableRotate = true;
-  controls.enablePan = true;
-  
-  controls.minDistance = 5;
-  controls.maxDistance = 100;
-  controls.maxPolarAngle = Math.PI / 2;
-  
-  console.log('OrbitControls initialized');
 }
 
 function setupLighting() {
@@ -180,9 +163,25 @@ function handleResize() {
 
 // Update the scene
 export function updateScene(deltaTime) {
-  if (controls) {
-    controls.update();
+  // Update camera to follow local car
+  if (localCarTarget) {
+    updateCameraFollow();
   }
+}
+
+// Update camera to follow the local car
+function updateCameraFollow() {
+  if (!localCarTarget || !camera) return;
+  
+  // Camera follows behind and above the car
+  const offset = new THREE.Vector3(0, 15, 20);
+  const desiredPosition = localCarTarget.clone().add(offset);
+  
+  // Smooth camera movement
+  camera.position.lerp(desiredPosition, 0.1);
+  
+  // Look at the car
+  camera.lookAt(localCarTarget);
 }
 
 // Render the scene
@@ -216,12 +215,18 @@ export function getCamera() {
   return camera;
 }
 
+// Set the target position for camera to follow (local car position)
+export function setCameraTarget(position) {
+  localCarTarget = position ? new THREE.Vector3(position.x, position.y, position.z) : null;
+}
+
+// Get current camera target
+export function getCameraTarget() {
+  return localCarTarget;
+}
+
 // Cleanup method
 export function disposeScene() {
-  if (controls) {
-    controls.dispose();
-  }
-
   if (scene) {
     scene.traverse((object) => {
       if (object.geometry) {
