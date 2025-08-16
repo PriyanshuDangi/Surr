@@ -112,13 +112,20 @@ class TokenMintService {
                     from: this.treasuryAccount.address
                 });
 
+                // Get gas price
+                const gasPrice = await this.web3.eth.getGasPrice();
+
+                // Convert BigInt values to numbers for calculations
+                const gasEstimateNum = Number(gasEstimate);
+                const gasPriceNum = Number(gasPrice);
+
                 // Send transaction
                 const transaction = {
                     from: this.treasuryAccount.address,
                     to: FLOW_CONFIG.SURR_TOKEN_ADDRESS,
                     data: this.contract.methods.mint(playerAddress, amountWei).encodeABI(),
-                    gas: Math.floor(gasEstimate * 1.2), // Add 20% buffer
-                    gasPrice: await this.web3.eth.getGasPrice()
+                    gas: Math.floor(gasEstimateNum * 1.2), // Add 20% buffer
+                    gasPrice: gasPriceNum.toString()
                 };
 
                 const signedTx = await this.web3.eth.accounts.signTransaction(transaction, process.env.TREASURY_PRIVATE_KEY);
