@@ -256,9 +256,213 @@
 
 **Test:** Players can join with custom names and appear/disappear correctly.
 
-## Phase 6: Physics Integration
+## Phase 6: Weapon System Foundation
 
-### Step 6.1: Set Up Cannon.js Physics World
+### Step 6.1: Create Weapon Pickup System (Server)
+**Objective:** Implement server-side weapon pickup management with automatic respawning.
+
+**Actions:**
+- Create `WeaponBox.js` module to manage weapon pickups server-side
+- Add methods to spawn 9 weapon pickups at predefined equidistant locations
+- Implement automatic 15-second global respawn timer for ALL weapon boxes simultaneously
+- Track weapon pickup availability states in game state (available/collected)
+- Add weapon pickup data to server game state broadcasts
+- Handle weapon pickup collection events from clients
+- Prevent collection if player already has a weapon
+
+**Test:** Server spawns 9 weapon pickups, handles collection events, and respawns ALL boxes every 15 seconds.
+
+### Step 6.2: Visualize Weapon Pickups (Client)
+**Objective:** Display weapon pickups and player weapon states in the game world.
+
+**Actions:**
+- Create visual representation for weapon pickups (rotating box/sphere with glow)
+- Add pickup objects to Three.js scene based on server game state data
+- Show/hide weapon pickups based on server availability state
+- Add weapon visual in front of player car when player has weapon
+- Add particle effects for pickup visibility and attraction
+- Handle weapon pickup respawning visual effects
+
+**Test:** Weapon pickups are visible in game world and players with weapons show visual indicators.
+
+### Step 6.3: Implement Pickup Collection
+**Objective:** Allow local player to collect weapon pickups with client-side collision detection.
+
+**Actions:**
+- Add collision detection between LOCAL PLAYER ONLY and weapon pickups on client
+- Check if local player already has a weapon before allowing collection
+- Immediately hide collected weapon pickup in local UI for responsive feedback
+- Send weapon pickup collection event to server with pickup ID
+- Add visual/audio feedback for successful collection (particle effects, sound)
+- Handle case where collection fails (player already has weapon)
+
+**Test:** Local player can collect weapon pickups (if no weapon held), pickup disappears immediately locally, and server validates collection.
+
+### Step 6.4: Player Weapon State Synchronization
+**Objective:** Synchronize weapon state for all players across clients.
+
+**Actions:**
+- Add weapon state to server Player data structure (boolean: hasWeapon)
+- Add weapon state to client Player objects for all players
+- Update player weapon state in server game state when pickup is collected
+- Synchronize weapon state across all clients via game state broadcasts
+- Set weapon state to false (no weapon) when player respawns after elimination
+- Handle weapon state updates in client player synchronization system
+
+**Test:** Player weapon state updates correctly on server and is synchronized to all clients. Weapon state resets on respawn.
+
+## Phase 7: Missile Combat System
+
+### Step 7.1: Create Missile Class (Client)
+**Objective:** Implement client-side missile projectiles.
+
+**Actions:**
+- Create `Missile.js` class for projectile management
+- Add physics body for missile with appropriate collision shape
+- Implement straight-line trajectory from shooter position
+- Add visual representation (simple geometry or 3D model)
+- Set missile speed and lifetime parameters
+
+**Test:** Missiles spawn and travel in straight lines when fired by local player.
+
+### Step 7.2: Implement Missile Firing
+**Objective:** Allow players to shoot missiles with spacebar.
+
+**Actions:**
+- Add missile firing logic to player input handling
+- Check for available missiles before firing
+- Create missile at player position with correct direction
+- Reduce player missile count when firing
+- Add firing cooldown to prevent rapid-fire exploit
+
+**Test:** Player can fire missiles using spacebar and missile count decreases correctly.
+
+### Step 7.3: Add Missile Collision Detection
+**Objective:** Detect when missiles hit players or walls.
+
+**Actions:**
+- Implement collision detection between missiles and players
+- Add collision with arena walls and obstacles
+- Create explosion effect when missile hits target
+- Remove missile from scene upon collision
+- Prepare hit data for server notification
+
+**Test:** Missiles explode on contact with players and walls, with visual effects.
+
+### Step 7.4: Implement Hit Reporting
+**Objective:** Report missile hits to server for elimination processing.
+
+**Actions:**
+- Send missile hit event to server when collision detected
+- Include shooter ID, target ID, and hit position in event
+- Server accepts hit reports without validation (client authoritative)
+- Handle network latency for hit confirmation
+
+**Test:** Server receives and processes hit reports from shooting clients.
+
+## Phase 8: Player Elimination & Respawning
+
+### Step 8.1: Implement Player Elimination (Server)
+**Objective:** Handle player elimination when hit by missiles.
+
+**Actions:**
+- Process missile hit events from clients
+- Accept hit reports without server-side validation
+- Award points to shooter and eliminate target
+- Set elimination timer (5 seconds) for respawn
+- Broadcast elimination event to all clients
+
+**Test:** Players are eliminated when hit and points are awarded correctly.
+
+### Step 8.2: Add Respawn System
+**Objective:** Respawn eliminated players after delay.
+
+**Actions:**
+- Implement 5-second respawn timer on server
+- Choose random spawn location for respawning player
+- Reset player state (weapons, position) on respawn
+- Broadcast respawn event to all clients
+- Ensure spawn locations are safe (not occupied)
+
+**Test:** Eliminated players respawn after 5 seconds at random locations.
+
+### Step 8.3: Handle Client-Side Elimination
+**Objective:** Display elimination effects and manage eliminated state.
+
+**Actions:**
+- Show elimination animation when player is hit
+- Display respawn countdown timer for eliminated player
+- Hide/show player objects based on elimination state
+- Add visual effects for elimination (explosion, particles)
+- Handle camera behavior during elimination period
+
+**Test:** Players see elimination effects and countdown timer works correctly.
+
+### Step 8.4: Add Elimination Notifications
+**Objective:** Show kill/death notifications to players.
+
+**Actions:**
+- Create notification system for eliminations
+- Display "Player X eliminated Player Y" messages
+- Add personal kill/death notifications for local player
+- Style notifications with appropriate colors and timing
+- Handle multiple rapid eliminations without UI overlap
+
+**Test:** All players see elimination notifications with correct player names.
+
+## Phase 9: Scoring & Leaderboard
+
+### Step 9.1: Implement Scoring System (Server)
+**Objective:** Track and manage player scores.
+
+**Actions:**
+- Add score tracking to server-side Player class
+- Award points for successful eliminations
+- Store scores persistently during game session
+- Add methods to sort players by score
+- Handle score resets when players disconnect
+
+**Test:** Server correctly tracks and updates player scores after eliminations.
+
+### Step 9.2: Create Leaderboard Data Structure
+**Objective:** Organize and format leaderboard information.
+
+**Actions:**
+- Create method to generate sorted leaderboard data
+- Include player name, score, and ranking in leaderboard
+- Update leaderboard after each elimination
+- Broadcast leaderboard updates to all clients
+- Handle tied scores appropriately
+
+**Test:** Server generates correct leaderboard data sorted by score.
+
+### Step 9.3: Display Leaderboard UI (Client)
+**Objective:** Show real-time leaderboard to players.
+
+**Actions:**
+- Create `Leaderboard.js` component for UI display
+- Style leaderboard with appropriate fonts and colors
+- Position leaderboard in corner of screen
+- Update display when leaderboard data changes
+- Highlight local player's position in leaderboard
+
+**Test:** Leaderboard appears on screen and updates in real-time during gameplay.
+
+### Step 9.4: Add Score Persistence
+**Objective:** Maintain scores throughout game session.
+
+**Actions:**
+- Ensure scores persist when players temporarily disconnect
+- Handle score state during respawning
+- Add score display next to player names in game world
+- Create end-of-round summary (future feature placeholder)
+- Optimize leaderboard update frequency
+
+**Test:** Player scores persist correctly through disconnections and respawns.
+
+## Phase 10: Physics Integration
+
+### Step 10.1: Set Up Cannon.js Physics World
 **Objective:** Initialize physics simulation for realistic movement.
 
 **Actions:**
@@ -271,7 +475,7 @@
 
 **Test:** Physics world runs without errors and debug renderer shows ground collision.
 
-### Step 6.2: Add Physics Bodies for Players
+### Step 10.2: Add Physics Bodies for Players
 **Objective:** Make players interact with physics system.
 
 **Actions:**
@@ -285,7 +489,7 @@
 
 **Test:** Player kart has realistic acceleration, deceleration, and turning physics.
 
-### Step 6.3: Implement Kart-Style Movement
+### Step 10.3: Implement Kart-Style Movement
 **Objective:** Create satisfying arcade kart driving mechanics.
 
 **Actions:**
@@ -297,7 +501,7 @@
 
 **Test:** Kart movement feels responsive and fun, similar to arcade kart games.
 
-### Step 6.4: Synchronize Physics Across Network
+### Step 10.4: Synchronize Physics Across Network
 **Objective:** Ensure physics consistency between clients.
 
 **Actions:**
@@ -309,9 +513,9 @@
 
 **Test:** Multiple clients maintain consistent physics behavior and positions.
 
-## Phase 7: Arena Environment
+## Phase 11: Arena Environment
 
-### Step 7.1: Create Basic Arena Boundaries
+### Step 11.1: Create Basic Arena Boundaries
 **Objective:** Add walls to contain the playing area.
 
 **Actions:**
@@ -323,7 +527,7 @@
 
 **Test:** Players cannot drive outside arena boundaries and collide realistically with walls.
 
-### Step 7.2: Add Visual Arena Elements
+### Step 11.2: Add Visual Arena Elements
 **Objective:** Create an engaging visual environment.
 
 **Actions:**
@@ -335,7 +539,7 @@
 
 **Test:** Arena looks visually appealing and maintains 60fps with multiple players.
 
-### Step 7.3: Place Strategic Elements
+### Step 11.3: Place Strategic Elements
 **Objective:** Add gameplay elements to the arena layout.
 
 **Actions:**
@@ -347,7 +551,7 @@
 
 **Test:** Arena provides interesting tactical gameplay opportunities and all collisions work.
 
-### Step 7.4: Optimize Arena Performance
+### Step 11.4: Optimize Arena Performance
 **Objective:** Ensure arena runs smoothly with all players and effects.
 
 **Actions:**
@@ -358,206 +562,6 @@
 - Profile and optimize rendering performance
 
 **Test:** Arena maintains stable framerate with maximum expected player count.
-
-## Phase 8: Weapon System Foundation
-
-### Step 8.1: Create Weapon Pickup System (Server)
-**Objective:** Implement server-side weapon pickup management.
-
-**Actions:**
-- Create `WeaponBox.js` class to manage weapon pickups
-- Add methods to spawn pickups at random arena locations
-- Implement 15-second respawn timer for collected pickups
-- Add collision detection for pickup collection
-- Place 9 weapon pickups at predefined equidistant locations
-- Use simple box geometry for weapon pickup visualization
-- Track weapon pickup states in game state
-
-**Test:** Server spawns weapon pickups and handles collection/respawn timing correctly.
-
-### Step 8.2: Visualize Weapon Pickups (Client)
-**Objective:** Display weapon pickups in the game world.
-
-**Actions:**
-- Create visual representation for weapon pickups (rotating box/sphere)
-- Add pickup objects to Three.js scene based on server data
-- Implement collection animation when pickup is obtained
-- Add particle effects or glow for pickup visibility
-- Update pickup display based on server state
-
-**Test:** Weapon pickups are visible in game world and animate when collected.
-
-### Step 8.3: Implement Pickup Collection
-**Objective:** Allow players to collect weapon pickups.
-
-**Actions:**
-- Add collision detection between player and pickups on client
-- Send pickup collection event to server when collision occurs
-- Update player weapon state when pickup is collected
-- Add visual/audio feedback for successful collection
-- Handle network latency for pickup collection conflicts
-
-**Test:** Players can collect weapon pickups and receive visual feedback.
-
-### Step 8.4: Create Player Weapon State
-**Objective:** Track which weapons each player currently has.
-
-**Actions:**
-- Add weapon inventory to both client and server Player classes
-- Implement if the player has a weapon now or not
-- Synchronize weapon state across all clients
-- During respawning the player will have no weapon
-
-**Test:** Player weapon count updates correctly and is visible to all players.
-
-## Phase 9: Missile Combat System
-
-### Step 9.1: Create Missile Class (Client)
-**Objective:** Implement client-side missile projectiles.
-
-**Actions:**
-- Create `Missile.js` class for projectile management
-- Add physics body for missile with appropriate collision shape
-- Implement straight-line trajectory from shooter position
-- Add visual representation (simple geometry or 3D model)
-- Set missile speed and lifetime parameters
-
-**Test:** Missiles spawn and travel in straight lines when fired by local player.
-
-### Step 9.2: Implement Missile Firing
-**Objective:** Allow players to shoot missiles with spacebar.
-
-**Actions:**
-- Add missile firing logic to player input handling
-- Check for available missiles before firing
-- Create missile at player position with correct direction
-- Reduce player missile count when firing
-- Add firing cooldown to prevent rapid-fire exploit
-
-**Test:** Player can fire missiles using spacebar and missile count decreases correctly.
-
-### Step 9.3: Add Missile Collision Detection
-**Objective:** Detect when missiles hit players or walls.
-
-**Actions:**
-- Implement collision detection between missiles and players
-- Add collision with arena walls and obstacles
-- Create explosion effect when missile hits target
-- Remove missile from scene upon collision
-- Prepare hit data for server notification
-
-**Test:** Missiles explode on contact with players and walls, with visual effects.
-
-### Step 9.4: Implement Hit Reporting
-**Objective:** Report missile hits to server for elimination processing.
-
-**Actions:**
-- Send missile hit event to server when collision detected
-- Include shooter ID, target ID, and hit position in event
-- Server accepts hit reports without validation (client authoritative)
-- Handle network latency for hit confirmation
-
-**Test:** Server receives and processes hit reports from shooting clients.
-
-## Phase 10: Player Elimination & Respawning
-
-### Step 10.1: Implement Player Elimination (Server)
-**Objective:** Handle player elimination when hit by missiles.
-
-**Actions:**
-- Process missile hit events from clients
-- Accept hit reports without server-side validation
-- Award points to shooter and eliminate target
-- Set elimination timer (5 seconds) for respawn
-- Broadcast elimination event to all clients
-
-**Test:** Players are eliminated when hit and points are awarded correctly.
-
-### Step 10.2: Add Respawn System
-**Objective:** Respawn eliminated players after delay.
-
-**Actions:**
-- Implement 5-second respawn timer on server
-- Choose random spawn location for respawning player
-- Reset player state (weapons, position) on respawn
-- Broadcast respawn event to all clients
-- Ensure spawn locations are safe (not occupied)
-
-**Test:** Eliminated players respawn after 5 seconds at random locations.
-
-### Step 10.3: Handle Client-Side Elimination
-**Objective:** Display elimination effects and manage eliminated state.
-
-**Actions:**
-- Show elimination animation when player is hit
-- Display respawn countdown timer for eliminated player
-- Hide/show player objects based on elimination state
-- Add visual effects for elimination (explosion, particles)
-- Handle camera behavior during elimination period
-
-**Test:** Players see elimination effects and countdown timer works correctly.
-
-### Step 10.4: Add Elimination Notifications
-**Objective:** Show kill/death notifications to players.
-
-**Actions:**
-- Create notification system for eliminations
-- Display "Player X eliminated Player Y" messages
-- Add personal kill/death notifications for local player
-- Style notifications with appropriate colors and timing
-- Handle multiple rapid eliminations without UI overlap
-
-**Test:** All players see elimination notifications with correct player names.
-
-## Phase 11: Scoring & Leaderboard
-
-### Step 11.1: Implement Scoring System (Server)
-**Objective:** Track and manage player scores.
-
-**Actions:**
-- Add score tracking to server-side Player class
-- Award points for successful eliminations
-- Store scores persistently during game session
-- Add methods to sort players by score
-- Handle score resets when players disconnect
-
-**Test:** Server correctly tracks and updates player scores after eliminations.
-
-### Step 11.2: Create Leaderboard Data Structure
-**Objective:** Organize and format leaderboard information.
-
-**Actions:**
-- Create method to generate sorted leaderboard data
-- Include player name, score, and ranking in leaderboard
-- Update leaderboard after each elimination
-- Broadcast leaderboard updates to all clients
-- Handle tied scores appropriately
-
-**Test:** Server generates correct leaderboard data sorted by score.
-
-### Step 11.3: Display Leaderboard UI (Client)
-**Objective:** Show real-time leaderboard to players.
-
-**Actions:**
-- Create `Leaderboard.js` component for UI display
-- Style leaderboard with appropriate fonts and colors
-- Position leaderboard in corner of screen
-- Update display when leaderboard data changes
-- Highlight local player's position in leaderboard
-
-**Test:** Leaderboard appears on screen and updates in real-time during gameplay.
-
-### Step 11.4: Add Score Persistence
-**Objective:** Maintain scores throughout game session.
-
-**Actions:**
-- Ensure scores persist when players temporarily disconnect
-- Handle score state during respawning
-- Add score display next to player names in game world
-- Create end-of-round summary (future feature placeholder)
-- Optimize leaderboard update frequency
-
-**Test:** Player scores persist correctly through disconnections and respawns.
 
 ## Phase 12: UI & User Experience
 
