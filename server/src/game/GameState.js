@@ -10,11 +10,26 @@ let weaponBoxes = new Map();
 let gameStarted = false;
 const maxPlayers = 6;
 
+// Round management
+const ROUND_DURATION = 3 * 60 * 1000; // 3 minutes in milliseconds
+let currentRound = {
+  number: 0,
+  startTime: null,
+  isActive: false
+};
+
 // Initialize game state
 export function initGameState() {
   players.clear();
   weaponBoxes.clear();
   gameStarted = false;
+  
+  // Reset round state
+  currentRound = {
+    number: 0,
+    startTime: null,
+    isActive: false
+  };
   
   // Initialize weapon pickup system
   initWeaponBoxes();
@@ -25,28 +40,55 @@ export function initGameState() {
 // Player management functions
 
 export function addPlayer(playerId, playerName, walletAddress = null) {
-  if (players.size >= maxPlayers) {
+  if (getActivePlayerCount() >= maxPlayers) {
     console.log(`Cannot add player ${playerName}: Game is full`);
     return false;
   }
 
+  // Check if player already exists (reactivate if inactive)
   if (players.has(playerId)) {
-    console.log(`Player ${playerId} already exists`);
-    return false;
+    const existingPlayer = players.get(playerId);
+    const previousScore = existingPlayer.score;
+    existingPlayer.isActive = true;
+    
+    // Only reset score if joining a new round, preserve score for same round reconnection
+    if (!currentRound.isActive) {
+      existingPlayer.score = 0;
+      console.log(`Player reactivated for new round: ${playerName} (${playerId}) - score reset to 0`);
+    } else {
+      console.log(`Player reconnected mid-round: ${playerName} (${playerId}) - preserved score: ${previousScore}`);
+    }
+    
+    // Start round if this is the first active player
+    if (getActivePlayerCount() === 1 && !currentRound.isActive) {
+      startNewRound();
+    }
+    return true;
   }
 
-  // Use Player.js utility to create standardized player object
+  // Create new player
   const player = createPlayer(playerId, playerName, walletAddress);
   players.set(playerId, player);
   console.log(`Player added: ${playerName} (${playerId})${walletAddress ? ` with wallet ${walletAddress}` : ''}`);
+  
+  // Start round if this is the first player
+  if (getActivePlayerCount() === 1 && !currentRound.isActive) {
+    startNewRound();
+  }
+  
   return true;
 }
 
 export function removePlayer(playerId) {
   if (players.has(playerId)) {
     const player = players.get(playerId);
-    players.delete(playerId);
-    console.log(`Player removed: ${player.name} (${playerId})`);
+    player.isActive = false; // Set inactive instead of deleting
+    console.log(`Player set inactive: ${player.name} (${playerId})`);
+    
+    // End round if no active players remain
+    if (getActivePlayerCount() === 0 && currentRound.isActive) {
+      endCurrentRound();
+    }
     return true;
   }
   return false;
@@ -81,31 +123,43 @@ export function getPlayerCount() {
   return players.size;
 }
 
+export function getActivePlayerCount() {
+  return getAllPlayers().filter(player => player.isActive).length;
+}
+
 export function canAcceptPlayers() {
-  return players.size < maxPlayers;
+  return getActivePlayerCount() < maxPlayers;
 }
 
 // Game state functions
 
 export function getGameStateForBroadcast() {
-  // Serialize all players for network transmission
-  const serializedPlayers = getAllPlayers().map(player => serializePlayer(player));
+  // Serialize only active players for network transmission
+  const activePlayers = getAllPlayers()
+    .filter(player => player.isActive)
+    .map(player => serializePlayer(player));
   
   // Include weapon pickup data
   const weaponBoxData = getWeaponBoxesForBroadcast();
   
   return {
-    players: serializedPlayers,
-    playerCount: getPlayerCount(),
+    players: activePlayers,
+    playerCount: getActivePlayerCount(),
     maxPlayers,
     gameStarted,
     weaponBoxes: weaponBoxData,
+    round: {
+      number: currentRound.number,
+      isActive: currentRound.isActive,
+      remainingTime: getRemainingTime()
+    },
     timestamp: Date.now()
   };
 }
 
 export function getLeaderboard() {
   return getAllPlayers()
+    .filter(player => player.isActive)
     .sort((a, b) => b.score - a.score)
     .map(player => ({
       id: player.id,
@@ -117,10 +171,12 @@ export function getLeaderboard() {
 
 export function awardPoints(playerId, points = 1) {
   const player = players.get(playerId);
-  if (player) {
+  if (player && player.isActive) {
     player.score += points;
-    console.log(`Player ${player.name} awarded ${points} points. Total: ${player.score}`);
+    console.log(`Player ${player.name} awarded ${points} points. Total score: ${player.score}`);
+    return true;
   }
+  return false;
 }
 
 // Update player weapon status
@@ -179,8 +235,108 @@ export function resetGameState() {
   weaponBoxes.clear();
   gameStarted = false;
   
+  // Reset round state
+  currentRound = {
+    number: 0,
+    startTime: null,
+    isActive: false
+  };
+  
   // Clean up weapon box system
   cleanupWeaponBoxes();
   
   console.log('Game state reset');
+}
+
+// Round management functions
+
+export function startNewRound() {
+  currentRound.number += 1;
+  currentRound.startTime = Date.now();
+  currentRound.isActive = true;
+  
+  // Reset all active players' scores
+  getAllPlayers().forEach(player => {
+    if (player.isActive) {
+      player.score = 0;
+    }
+  });
+  
+  console.log(`🎮 Round ${currentRound.number} started with ${getActivePlayerCount()} players`);
+}
+
+export function endCurrentRound() {
+  if (!currentRound.isActive) return;
+  
+  currentRound.isActive = false;
+  console.log(`🏁 Round ${currentRound.number} ended`);
+  
+  // Log players eligible for rewards (including inactive players with kills)
+  const eligiblePlayers = getPlayersEligibleForRewards();
+  if (eligiblePlayers.length > 0) {
+    console.log(`💰 Players eligible for rewards: ${eligiblePlayers.map(p => `${p.name} (${p.score} kills)`).join(', ')}`);
+  } else {
+    console.log(`💰 No players eligible for rewards this round`);
+  }
+  
+  // TODO: Calculate and distribute rewards in Phase 2.8
+}
+
+export function getRemainingTime() {
+  if (!currentRound.isActive || !currentRound.startTime) {
+    return 0;
+  }
+  
+  const elapsed = Date.now() - currentRound.startTime;
+  const remaining = Math.max(0, ROUND_DURATION - elapsed);
+  return remaining;
+}
+
+export function checkRoundTimer() {
+  if (currentRound.isActive && getRemainingTime() <= 0) {
+    endCurrentRound();
+    
+    // Start new round if players are still active
+    if (getActivePlayerCount() > 0) {
+      startNewRound();
+    }
+  }
+}
+
+export function getCurrentRound() {
+  return { ...currentRound };
+}
+
+// Get all players eligible for rewards (including inactive players with kills)
+export function getPlayersEligibleForRewards() {
+  return getAllPlayers()
+    .filter(player => player.score > 0) // Anyone with kills gets rewards, regardless of active status
+    .sort((a, b) => b.score - a.score)
+    .map(player => ({
+      id: player.id,
+      name: player.name,
+      walletAddress: player.walletAddress,
+      score: player.score,
+      isActive: player.isActive
+    }));
+}
+
+// Get summary of player states for debugging
+export function getPlayerStateSummary() {
+  const allPlayers = getAllPlayers();
+  const activeCount = allPlayers.filter(p => p.isActive).length;
+  const inactiveCount = allPlayers.filter(p => !p.isActive).length;
+  const playersWithKills = allPlayers.filter(p => p.score > 0).length;
+  
+  return {
+    total: allPlayers.length,
+    active: activeCount,
+    inactive: inactiveCount,
+    withKills: playersWithKills,
+    round: {
+      number: currentRound.number,
+      isActive: currentRound.isActive,
+      remainingTime: getRemainingTime()
+    }
+  };
 }

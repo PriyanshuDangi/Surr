@@ -9,8 +9,9 @@ export function createPlayer(id, name, walletAddress = null) {
     walletAddress,         // Full wallet address for Web3 integration
     position: { x: 0, y: 0, z: 0 },
     rotation: { x: 0, y: 0, z: 0 },
-    score: 0,
+    score: 0,              // Kills in current round (resets each round)
     isAlive: true,
+    isActive: true,        // Whether player is connected (false when disconnected)
     weapon: null,
     joinedAt: Date.now()
   };
@@ -40,8 +41,9 @@ export function serializePlayer(player) {
     walletAddress: player.walletAddress, // Full wallet address for Web3 operations
     position: player.position,
     rotation: player.rotation,
-    score: player.score,
+    score: player.score,         // Current round score
     isAlive: player.isAlive,
+    isActive: player.isActive,   // Connection status
     weapon: player.weapon
   };
 }
@@ -104,6 +106,10 @@ export function updatePlayerData(player, updates) {
   
   if (typeof updates.score === 'number' && updates.score >= 0) {
     updatedPlayer.score = updates.score;
+  }
+  
+  if (typeof updates.isActive === 'boolean') {
+    updatedPlayer.isActive = updates.isActive;
   }
   
   return updatedPlayer;
