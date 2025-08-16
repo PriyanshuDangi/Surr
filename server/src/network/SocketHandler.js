@@ -12,7 +12,9 @@ import {
   updatePlayerWeapon,
   setPlayerAliveStatus,
   handleWeaponPickupCollection,
-  awardPoints
+  awardPoints,
+  checkRoundTimer,
+  getPlayerStateSummary
 } from '../game/GameState.js';
 import { validateWalletAddress, formatWalletAddress } from '../game/Player.js';
 
@@ -45,6 +47,9 @@ function startServerTick() {
   
   
   gameTickInterval = setInterval(() => {
+    // Check round timer every tick
+    checkRoundTimer();
+    
     // Only broadcast if there are connected players
     if (connectedClients.size > 0 && Date.now() - lastGameStateBroadcast > TICK_INTERVAL && pendingGameStateBroadcast) {
       broadcastGameState();
@@ -383,7 +388,7 @@ function handleMissileHitEvent(socket, data) {
   
   // Process elimination (server accepts hit reports without validation - client authoritative)
   
-  // Award points to shooter (1 point per elimination)
+  // Award points to shooter
   awardPoints(shooterId, 1);
   
   // Eliminate target player (set as not alive, remove weapon)
@@ -540,7 +545,12 @@ export function broadcastGameState() {
   
   if (now - broadcastGameState.lastLogTime > 10000) { // Log every 10 seconds
     const playersData = gameState.players || [];
-    console.log(`📢 Game state broadcasts: ${broadcastGameState.broadcastCount} in last 10s | Players: ${playersData.length} | Clients: ${connectedClients.size}`);
+    const playerSummary = getPlayerStateSummary();
+    console.log(`📢 Game state broadcasts: ${broadcastGameState.broadcastCount} in last 10s | Active: ${playersData.length} | Total: ${playerSummary.total} (${playerSummary.inactive} inactive) | Clients: ${connectedClients.size}`);
+    if (playerSummary.round.isActive) {
+      const timeLeft = Math.ceil(playerSummary.round.remainingTime / 1000);
+      console.log(`🎮 Round ${playerSummary.round.number} active - ${timeLeft}s remaining | Players with kills: ${playerSummary.withKills}`);
+    }
     broadcastGameState.lastLogTime = now;
     broadcastGameState.broadcastCount = 0;
   }
