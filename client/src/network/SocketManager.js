@@ -75,6 +75,11 @@ export function initWebSocket() {
   socket.on('gameState', (gameState) => {
     handleGameState(gameState);
   });
+  
+  // Step 6.3: Listen for weapon pickup collection responses
+  socket.on('weaponPickupResponse', (data) => {
+    handleWeaponPickupResponse(data);
+  });
 }
 
 export function getSocket() {
@@ -155,6 +160,23 @@ export function resetBroadcastState() {
   console.log('Position broadcast state reset');
 }
 
+// Step 6.3: Send weapon pickup collection event to server
+export function sendWeaponPickupCollection(weaponBoxId) {
+  if (!socket || !isConnected) {
+    console.log('Cannot send weapon pickup collection - not connected to server');
+    return false;
+  }
+  
+  const collectionData = {
+    weaponBoxId: weaponBoxId,
+    timestamp: Date.now()
+  };
+  
+  socket.emit('weaponPickupCollection', collectionData);
+  console.log(`📤 Sent weapon pickup collection request for box ${weaponBoxId}`);
+  return true;
+}
+
 // Step 5.2: Game state receiving functions
 export function setGameStateCallback(callback) {
   gameStateCallback = callback;
@@ -176,6 +198,19 @@ function handleGameState(gameState) {
     console.log(`📨 Game state received: ${gameStateStats.receivedCount} updates in last 5s | Players: ${playersCount}`);
     gameStateStats.lastLogTime = now;
     gameStateStats.receivedCount = 0;
+  }
+}
+
+// Step 6.3: Handle weapon pickup collection response from server
+function handleWeaponPickupResponse(data) {
+  const { success, reason, weapon, weaponBoxId } = data;
+  
+  if (success) {
+    console.log(`✅ Weapon pickup collection confirmed by server: ${weapon} from box ${weaponBoxId}`);
+    // The player weapon state will be updated via game state broadcast
+  } else {
+    console.log(`❌ Weapon pickup collection failed: ${reason} (box ${weaponBoxId})`);
+    // The pickup will be shown again via game state sync if collection failed
   }
 }
 
