@@ -30,7 +30,7 @@
 - Weapon pickups spawn at random locations in the arena
 - Players drive over pickups to collect them
 - Each pickup provides one missile shot
-- Players can hold multiple missiles
+- Players can have one missile at a time
 
 **Missile Mechanics:**
 - **Firing:** Press spacebar to shoot equipped missile
