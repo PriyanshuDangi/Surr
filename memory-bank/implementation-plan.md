@@ -280,6 +280,7 @@
 - Adjust mass, friction, and restitution for realistic kart behavior
 - Add constraints to prevent tipping over
 - Add collision detection between player karts
+- Reference car implementation from Sketchbook project (Car.ts) using car.glb model
 
 **Test:** Player kart has realistic acceleration, deceleration, and turning physics.
 
