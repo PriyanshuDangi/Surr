@@ -1,0 +1,28 @@
+{
+  "name": "surr-client",
+  "version": "1.0.0",
+  "description": "Surr Game Client - Multiplayer Kart Arena Game",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [
+    "game",
+    "multiplayer",
+    "three.js",
+    "kart",
+    "arena"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "vite": "^7.1.2"
+  },
+  "dependencies": {
+    "cannon-es": "^0.20.0",
+    "socket.io-client": "^4.8.1",
+    "three": "^0.179.1"
+  }
+}
