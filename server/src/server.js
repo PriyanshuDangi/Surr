@@ -7,7 +7,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import { initSocketHandler, handleConnection } from './network/SocketHandler.js';
+import { initSocketHandler, handleConnection, cleanup } from './network/SocketHandler.js';
 import { initGameState } from './game/GameState.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -62,4 +62,14 @@ server.listen(PORT, () => {
   console.log(`Surr Game Server running on port ${PORT}`);
   console.log(`Health check available at http://localhost:${PORT}/health`);
   console.log('Socket.IO server ready');
+});
+
+// Graceful shutdown handling
+process.on('SIGINT', () => {
+  console.log('\nShutting down Surr Game Server...');
+  cleanup();
+  server.close(() => {
+    console.log('Server closed successfully');
+    process.exit(0);
+  });
 });
