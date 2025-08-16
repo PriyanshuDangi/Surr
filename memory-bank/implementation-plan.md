@@ -314,51 +314,59 @@
 ## Phase 7: Missile Combat System
 
 ### Step 7.1: Create Missile Class (Client)
-**Objective:** Implement client-side missile projectiles.
+**Objective:** Implement client-side missile projectiles with network synchronization.
 
 **Actions:**
 - Create `Missile.js` class for projectile management
-- Add physics body for missile with appropriate collision shape
-- Implement straight-line trajectory from shooter position
-- Add visual representation (simple geometry or 3D model)
-- Set missile speed and lifetime parameters
+- Add visual representation (simple geometry - cylinder/rocket shape)
+- Implement straight-line trajectory from shooter position and direction
+- Set missile speed (consistent across all clients) and lifetime parameters (auto-destroy after 5 seconds)
+- Add missile ID system for tracking across network
+- Store shooter ID to track ownership for hit detection
 
-**Test:** Missiles spawn and travel in straight lines when fired by local player.
+**Test:** Missiles spawn and travel in straight lines when fired locally.
 
-### Step 7.2: Implement Missile Firing
-**Objective:** Allow players to shoot missiles with spacebar.
-
-**Actions:**
-- Add missile firing logic to player input handling
-- Check for available missiles before firing
-- Create missile at player position with correct direction
-- Reduce player missile count when firing
-- Add firing cooldown to prevent rapid-fire exploit
-
-**Test:** Player can fire missiles using spacebar and missile count decreases correctly.
-
-### Step 7.3: Add Missile Collision Detection
-**Objective:** Detect when missiles hit players or walls.
+### Step 7.2: Implement Missile Firing & Broadcasting
+**Objective:** Allow players to shoot missiles with spacebar and synchronize across all clients.
 
 **Actions:**
-- Implement collision detection between missiles and players
-- Add collision with arena walls and obstacles
+- Add missile firing logic to player input handling (spacebar key)
+- Check if player has weapon before allowing firing
+- Create missile at player position with correct direction (forward from car)
+- Set player weapon to null when missile is fired
+- Send missile fire event to server with: shooter ID, position, direction, missile ID, timestamp
+- Server broadcasts missile data to all clients for visual synchronization
+- All clients create visual missile representations from server data
+- Only LOCAL missiles (fired by local player) perform hit detection
+
+**Test:** Player can fire missiles using spacebar, weapon becomes null, and all players see the missile flying.
+
+### Step 7.3: Add Local Missile Collision Detection
+**Objective:** Detect when LOCAL missiles hit players or walls (only local missiles detect hits).
+
+**Actions:**
+- Implement collision detection between LOCAL missiles and all players (including shooter)
+- Add collision with arena walls and boundaries
 - Create explosion effect when missile hits target
-- Remove missile from scene upon collision
-- Prepare hit data for server notification
+- Remove missile from scene upon collision (locally first, then notify server)
+- Only missiles fired by local player detect hits - remote missiles are visual only
+- Calculate hit data: missile ID, shooter ID, target player ID, hit position
 
-**Test:** Missiles explode on contact with players and walls, with visual effects.
+**Test:** Local missiles explode on contact with players and walls, with visual effects.
 
-### Step 7.4: Implement Hit Reporting
+### Step 7.4: Implement Hit Reporting & Server Processing
 **Objective:** Report missile hits to server for elimination processing.
 
 **Actions:**
-- Send missile hit event to server when collision detected
-- Include shooter ID, target ID, and hit position in event
-- Server accepts hit reports without validation (client authoritative)
-- Handle network latency for hit confirmation
+- Send missile hit event to server when LOCAL missile collision detected
+- Include: missile ID, shooter ID, target player ID, hit position, timestamp
+- Server accepts hit reports without validation (client authoritative for hits)
+- Server processes elimination: award points to shooter, eliminate target, reset target weapon
+- Server broadcasts elimination event to all clients
+- Server removes missile from active missiles list and broadcasts missile destruction
+- Handle edge cases: missile hits after target disconnection, duplicate hit reports
 
-**Test:** Server receives and processes hit reports from shooting clients.
+**Test:** Server receives hit reports, processes eliminations correctly, and synchronizes elimination across all clients.
 
 ## Phase 8: Player Elimination & Respawning
 
