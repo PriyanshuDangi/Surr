@@ -2,13 +2,14 @@
 // Function-based game controller that manages the game loop and coordination
 
 import { initScene, updateScene, renderScene, disposeScene, getCamera } from './Scene.js';
-import { initWebSocket, isSocketConnected, broadcastPlayerPosition, setGameStateCallback, addConnectionCallback, addDisconnectionCallback, sendWeaponPickupCollection, sendMissileFire, sendMissileHit } from '../network/SocketManager.js';
+import { initWebSocket, isSocketConnected, broadcastPlayerPosition, setGameStateCallback, addConnectionCallback, addDisconnectionCallback, sendWeaponPickupCollection, sendMissileFire, sendMissileHit, setEliminationCallback, setRespawnCallback } from '../network/SocketManager.js';
 import { playerManager } from './Player.js';
 import { initControls, getInputState, isMoving, disposeControls } from './Controls.js';
 import { initWelcomeScreen, updateConnectionStatus, hideWelcomeScreen, isWelcomeScreenShown, getPlayerName, getLocalPlayerId, handleDisconnection } from '../ui/WelcomeScreen.js';
-import { initNotifications, showWelcomeNotification, showPlayerJoinedNotification, showPlayerLeftNotification, showConnectionNotification } from '../ui/Notifications.js';
+import { initNotifications, showWelcomeNotification, showPlayerJoinedNotification, showPlayerLeftNotification, showConnectionNotification, showEliminationNotification, showKillNotification, showDeathNotification } from '../ui/Notifications.js';
 import { initWeaponPickups, updateWeaponPickups, animateWeaponPickups, disposeWeaponPickups, checkWeaponPickupCollisions, attemptLocalPickupCollection } from './WeaponPickups.js';
 import { initMissileSystem, updateMissiles, disposeMissileSystem, setMissileHitCallback } from './Missile.js';
+import { initRespawnTimer, showRespawnTimer, hideRespawnTimer, disposeRespawnTimer } from '../ui/RespawnTimer.js';
 import Stats from 'stats.js';
 import * as THREE from 'three';
 
@@ -62,6 +63,9 @@ export async function initGameEngine() {
     // Step 7.1: Initialize missile system
     initMissileSystem();
     
+    // Step 8.3: Initialize respawn timer system
+    initRespawnTimer();
+    
     // Initialize websocket
     initWebSocket();
     
@@ -82,6 +86,10 @@ export async function initGameEngine() {
     playerManager.onPlayerJoined = showPlayerJoinedNotification;
     playerManager.onPlayerLeft = showPlayerLeftNotification;
     playerManager.onLocalPlayerJoined = showWelcomeNotification;
+    
+    // Step 8.3: Set up elimination and respawn callbacks
+    setEliminationCallback(handlePlayerElimination);
+    setRespawnCallback(handlePlayerRespawn);
     
     // Don't create test player immediately - wait for user to join
     // createTestPlayer();
@@ -330,6 +338,9 @@ export function disposeGameEngine() {
   // Dispose missile system (Step 7.1)
   disposeMissileSystem();
   
+  // Dispose respawn timer (Step 8.3)
+  disposeRespawnTimer();
+  
   // Dispose scene and stats
   disposeScene();
 
@@ -388,6 +399,60 @@ function createTestPlayer() {
     console.error('Failed to create test players:', error);
     return null;
   }
+}
+
+// Step 8.3: Handle player elimination events
+function handlePlayerElimination(data) {
+  const { shooterId, targetId, hitPosition } = data;
+  const localPlayerId = getLocalPlayerId();
+  
+  // Get player names for better UX
+  const shooter = playerManager.getPlayer(shooterId);
+  const target = playerManager.getPlayer(targetId);
+  
+  const shooterName = shooter ? shooter.name : 'Unknown';
+  const targetName = target ? target.name : 'Unknown';
+  
+  console.log(`💀 Elimination: ${targetName} eliminated by ${shooterName}`);
+  
+  // Step 8.4: Show appropriate notifications based on local player involvement
+  const isLocalPlayerInvolved = (targetId === localPlayerId) || (shooterId === localPlayerId);
+  
+  if (targetId === localPlayerId) {
+    // Local player was eliminated
+    showRespawnTimer(shooterName, 5000);
+    showDeathNotification(shooterName);
+    console.log('💀 You were eliminated! Showing respawn timer...');
+  } else if (shooterId === localPlayerId) {
+    // Local player got a kill
+    showKillNotification(targetName);
+    console.log(`🎯 You eliminated ${targetName}!`);
+  } else {
+    // Show general elimination notification
+    showEliminationNotification(shooterName, targetName, false);
+  }
+  
+  // TODO: Add explosion effects at hit position
+  // TODO: Add screen shake for local player if affected
+}
+
+// Step 8.3: Handle player respawn events
+function handlePlayerRespawn(data) {
+  const { playerId, spawnPosition } = data;
+  const localPlayerId = getLocalPlayerId();
+  
+  // Hide respawn timer if local player respawned
+  if (playerId === localPlayerId) {
+    hideRespawnTimer();
+    console.log('✨ You have respawned!');
+  }
+  
+  const player = playerManager.getPlayer(playerId);
+  const playerName = player ? player.name : 'Unknown';
+  
+  console.log(`✨ Player respawned: ${playerName} at position (${spawnPosition.x}, ${spawnPosition.z})`);
+  
+  // TODO: Add respawn effects (particles, flash, etc.)
 }
 
 // Step 5.3: Export function for debugging interpolation in browser console

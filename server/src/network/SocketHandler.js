@@ -353,7 +353,63 @@ function handleMissileHitEvent(socket, data) {
   console.log(`🎯 Player ${targetId} eliminated by ${shooterId}. Respawning in 5 seconds.`);
 }
 
-// Step 7.4: Respawn eliminated player
+// Step 8.2: Generate random spawn position
+function generateRandomSpawnPosition() {
+  const arenaSize = 40; // Slightly smaller than full arena to avoid spawning too close to edges
+  const spawnPositions = [
+    { x: 0, y: 1, z: 0 },           // Center
+    { x: 15, y: 1, z: 15 },         // Northeast
+    { x: -15, y: 1, z: 15 },        // Northwest  
+    { x: 15, y: 1, z: -15 },        // Southeast
+    { x: -15, y: 1, z: -15 },       // Southwest
+    { x: 20, y: 1, z: 0 },          // East
+    { x: -20, y: 1, z: 0 },         // West
+    { x: 0, y: 1, z: 20 },          // North
+    { x: 0, y: 1, z: -20 }          // South
+  ];
+  
+  // Return random spawn position
+  return spawnPositions[Math.floor(Math.random() * spawnPositions.length)];
+}
+
+// Step 8.2: Check if spawn position is safe (not occupied by another player)
+function isSpawnPositionSafe(position, playerId) {
+  const safeDistance = 5; // Minimum distance from other players
+  
+  // Get all other alive players
+  const gameState = getGameStateForBroadcast();
+  const otherPlayers = gameState.players.filter(p => p.id !== playerId && p.isAlive);
+  
+  // Check distance from each other player
+  for (const player of otherPlayers) {
+    const distance = Math.sqrt(
+      Math.pow(position.x - player.position.x, 2) +
+      Math.pow(position.z - player.position.z, 2)
+    );
+    
+    if (distance < safeDistance) {
+      return false;
+    }
+  }
+  
+  return true;
+}
+
+// Step 8.2: Find safe spawn position
+function findSafeSpawnPosition(playerId, maxAttempts = 10) {
+  for (let i = 0; i < maxAttempts; i++) {
+    const position = generateRandomSpawnPosition();
+    if (isSpawnPositionSafe(position, playerId)) {
+      return position;
+    }
+  }
+  
+  // If no safe position found, return center position
+  console.log(`Warning: Could not find safe spawn position for player ${playerId}, using center`);
+  return { x: 0, y: 1, z: 0 };
+}
+
+// Step 8.2: Respawn eliminated player with random position
 function respawnPlayer(playerId) {
   // Check if player is still connected
   if (!connectedClients.has(playerId)) {
@@ -361,20 +417,25 @@ function respawnPlayer(playerId) {
     return;
   }
   
-  // Respawn player (set alive, reset weapon)
+  // Generate safe spawn position
+  const spawnPosition = findSafeSpawnPosition(playerId);
+  
+  // Reset player state
   setPlayerAliveStatus(playerId, true);
   updatePlayerWeapon(playerId, null);
+  updatePlayerPosition(playerId, spawnPosition, { x: 0, y: 0, z: 0 });
   
-  // Broadcast respawn event
+  // Broadcast respawn event with spawn position
   const respawnData = {
     playerId,
+    spawnPosition,
     timestamp: Date.now()
   };
   
   broadcastToAll('playerRespawned', respawnData);
   broadcastGameState();
   
-  console.log(`✨ Player ${playerId} respawned`);
+  console.log(`✨ Player ${playerId} respawned at position (${spawnPosition.x}, ${spawnPosition.z})`);
 }
 
 // Broadcast functions

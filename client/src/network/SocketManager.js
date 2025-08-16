@@ -286,21 +286,45 @@ function handleMissileSpawned(data) {
   );
 }
 
+// Step 8.3: Elimination callback for client-side effects
+let eliminationCallback = null;
+
+export function setEliminationCallback(callback) {
+  eliminationCallback = callback;
+}
+
 // Step 7.4: Handle player elimination events from server
 function handlePlayerEliminated(data) {
   const { shooterId, targetId, hitPosition } = data;
   
   console.log(`💀 Player elimination: ${targetId} eliminated by ${shooterId}`);
   
+  // Call elimination callback for visual effects
+  if (eliminationCallback) {
+    eliminationCallback(data);
+  }
+  
   // Player state will be updated via game state broadcast
   // The elimination is mainly for visual/audio feedback
 }
 
+// Step 8.3: Respawn callback for client-side effects
+let respawnCallback = null;
+
+export function setRespawnCallback(callback) {
+  respawnCallback = callback;
+}
+
 // Step 7.4: Handle player respawn events from server
 function handlePlayerRespawned(data) {
-  const { playerId } = data;
+  const { playerId, spawnPosition } = data;
   
   console.log(`✨ Player respawned: ${playerId}`);
+  
+  // Call respawn callback for visual effects
+  if (respawnCallback) {
+    respawnCallback(data);
+  }
   
   // Player state will be updated via game state broadcast
   // The respawn is mainly for visual/audio feedback

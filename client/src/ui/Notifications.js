@@ -119,7 +119,11 @@ function getNotificationStyles(type) {
     warning: 'border-color: #f39c12; background: rgba(243, 156, 18, 0.1);',
     error: 'border-color: #e74c3c; background: rgba(231, 76, 60, 0.1);',
     join: 'border-color: #2ecc71; background: rgba(46, 204, 113, 0.1);',
-    leave: 'border-color: #f39c12; background: rgba(243, 156, 18, 0.1);'
+    leave: 'border-color: #f39c12; background: rgba(243, 156, 18, 0.1);',
+    elimination: 'border-color: #9b59b6; background: rgba(155, 89, 182, 0.1);',
+    'elimination-personal': 'border-color: #e74c3c; background: rgba(231, 76, 60, 0.2);',
+    kill: 'border-color: #27ae60; background: rgba(39, 174, 96, 0.15);',
+    death: 'border-color: #c0392b; background: rgba(192, 57, 43, 0.15);'
   };
   
   return baseStyles + (typeStyles[type] || typeStyles.info);
@@ -140,6 +144,21 @@ export function showWelcomeNotification(playerName) {
 
 export function showConnectionNotification(message, type = 'info') {
   showNotification(message, type, 3000);
+}
+
+// Step 8.4: Elimination notifications
+export function showEliminationNotification(shooterName, targetName, isLocalPlayerInvolved = false) {
+  const message = `💀 ${shooterName} eliminated ${targetName}`;
+  const type = isLocalPlayerInvolved ? 'elimination-personal' : 'elimination';
+  showNotification(message, type, 4000);
+}
+
+export function showKillNotification(targetName) {
+  showNotification(`🎯 You eliminated ${targetName}!`, 'kill', 3000);
+}
+
+export function showDeathNotification(shooterName) {
+  showNotification(`💀 You were eliminated by ${shooterName}`, 'death', 4000);
 }
 
 // Cleanup function

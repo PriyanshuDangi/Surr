@@ -387,6 +387,7 @@
 
 **Actions:**
 - Implement 5-second respawn timer on server
+- show a timer to the respawing player
 - Choose random spawn location for respawning player
 - Reset player state (weapons, position) on respawn
 - Broadcast respawn event to all clients
