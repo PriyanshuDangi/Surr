@@ -2,7 +2,7 @@
 // Function-based game controller that manages the game loop and coordination
 
 import { initScene, updateScene, renderScene, disposeScene, getCamera } from './Scene.js';
-import { initWebSocket, isSocketConnected } from '../network/SocketManager.js';
+import { initWebSocket, isSocketConnected, broadcastPlayerPosition } from '../network/SocketManager.js';
 import { playerManager } from './Player.js';
 import { initControls, getInputState, isMoving, disposeControls } from './Controls.js';
 import Stats from 'stats.js';
@@ -103,20 +103,11 @@ function processInput(deltaTime) {
     // Update camera to follow local player
     updateCameraFollow(localPlayer, deltaTime);
     
-    // Log movement state periodically for debugging
-    if (isMoving() && localPlayer.speed > 0.1) {
-      const now = performance.now();
-      if (!processInput.lastLogTime || now - processInput.lastLogTime > 3000) {
-        console.log('🚗 Player Movement:', {
-          position: {
-            x: localPlayer.position.x.toFixed(2),
-            z: localPlayer.position.z.toFixed(2)
-          },
-          rotation: localPlayer.rotation.y.toFixed(2),
-          speed: localPlayer.speed.toFixed(2)
-        });
-        processInput.lastLogTime = now;
-      }
+    // Step 5.1: Optimized position broadcasting
+    // Only broadcast when connected and there are meaningful changes
+    if (isSocketConnected()) {
+      const positionData = localPlayer.getPositionData();
+      broadcastPlayerPosition(positionData);
     }
   }
 }
@@ -217,20 +208,4 @@ function createTestPlayer() {
     console.error('Failed to create test players:', error);
     return null;
   }
-}
-
-// Get debug information
-export function getDebugInfo() {
-  const input = getInputState();
-  return {
-    deltaTime,
-    isRunning,
-    socketConnected: isSocketConnected(),
-    playersCount: playerManager.getAllPlayers().length,
-    localPlayer: playerManager.getLocalPlayer()?.name || 'None',
-    inputState: {
-      isMoving: isMoving(),
-      activeInputs: Object.entries(input).filter(([key, value]) => value === true).map(([key]) => key)
-    }
-  };
 }

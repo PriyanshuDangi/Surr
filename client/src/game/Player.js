@@ -218,7 +218,9 @@ export class Player {
         y: this.rotation.y,
         z: this.rotation.z
       },
-      speed: this.speed
+      speed: this.speed,
+      weapon: this.weapon,
+      isAlive: this.isAlive
     };
   }
   
