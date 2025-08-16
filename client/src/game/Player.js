@@ -40,9 +40,10 @@ export class Player {
     this.targetRotation = new THREE.Euler();
     this.lastUpdateTime = 0;
     
-    // Three.js mesh object
+    // Three.js mesh objects
     this.mesh = null;
     this.nameTag = null;
+    this.weaponMesh = null;
     
     // Initialize visual representation
     this.createMesh();
@@ -119,6 +120,9 @@ export class Player {
         this.nameTag.position.copy(this.position);
         this.nameTag.position.y += 3;
       }
+      
+      // Update weapon position
+      this.updateWeaponPosition();
     } else {
       // Remote player: add to interpolation buffer
       this.addPositionToBuffer(position, rotation);
@@ -240,6 +244,9 @@ export class Player {
       this.nameTag.position.y += 3;
     }
     
+    // Update weapon position
+    this.updateWeaponPosition();
+    
     // Clean up old buffer entries
     this.cleanupInterpolationBuffer(renderTime);
   }
@@ -324,15 +331,52 @@ export class Player {
   updateWeapon(weapon) {
     this.weapon = weapon;
     
-    // Visual indication of weapon status (could add glow effect later)
+    // Remove existing weapon visual
+    if (this.weaponMesh) {
+      // Since weapon is child of car mesh, remove it from the car
+      this.mesh.remove(this.weaponMesh);
+      this.weaponMesh.geometry.dispose();
+      this.weaponMesh.material.dispose();
+      this.weaponMesh = null;
+    }
+    
+    // Visual indication of weapon status
     if (this.mesh) {
       const material = this.mesh.material;
       if (weapon === 'missile') {
         material.emissive.setHex(0x444444); // Slight glow when armed
+        this.createWeaponVisual();
       } else {
         material.emissive.setHex(0x000000); // No glow when unarmed
       }
     }
+  }
+  
+  // Create visual weapon in front of player
+  createWeaponVisual() {
+    if (this.weapon === 'missile') {
+      // Create missile visual
+      const missileGeometry = new THREE.CylinderGeometry(0.1, 0.15, 1, 8);
+      const missileMaterial = new THREE.MeshLambertMaterial({
+        color: 0xff0000,
+        emissive: 0x220000
+      });
+      
+      this.weaponMesh = new THREE.Mesh(missileGeometry, missileMaterial);
+      
+      // Position weapon relative to car (local coordinates)
+      this.weaponMesh.position.set(0, 0.8, -1.8); // In front and above
+      this.weaponMesh.rotation.x = Math.PI / 2; // Point forward horizontally
+      
+      // Make weapon a child of the car mesh so it moves with it automatically
+      this.mesh.add(this.weaponMesh);
+    }
+  }
+  
+  // Update weapon position relative to player (no longer needed - weapon is child of car)
+  updateWeaponPosition() {
+    // Weapon is now a child of the car mesh, so it moves automatically
+    // No manual position updates needed
   }
   
   // Update alive status
@@ -392,6 +436,12 @@ export class Player {
       this.nameTag.material.map.dispose();
       this.nameTag.material.dispose();
       this.nameTag = null;
+    }
+    
+    if (this.weaponMesh) {
+      // Weapon is child of car mesh, so it will be disposed with the car
+      // Just clean up the reference
+      this.weaponMesh = null;
     }
     
     console.log(`Player disposed: ${this.name}`);
