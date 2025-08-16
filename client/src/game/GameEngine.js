@@ -2,7 +2,7 @@
 // Function-based game controller that manages the game loop and coordination
 
 import { initScene, updateScene, renderScene, disposeScene, getCamera } from './Scene.js';
-import { initWebSocket, isSocketConnected, broadcastPlayerPosition, setGameStateCallback, addConnectionCallback, addDisconnectionCallback, sendWeaponPickupCollection, sendMissileFire, sendMissileHit, setEliminationCallback, setRespawnCallback, setLeaderboardCallback } from '../network/SocketManager.js';
+import { initWebSocket, isSocketConnected, broadcastPlayerPosition, setGameStateCallback, addConnectionCallback, addDisconnectionCallback, sendWeaponPickupCollection, sendMissileFire, sendMissileHit, setEliminationCallback, setRespawnCallback, setLeaderboardCallback, setRoundEventCallback } from '../network/SocketManager.js';
 import { playerManager } from './Player.js';
 import { initControls, getInputState, isMoving, disposeControls } from './Controls.js';
 import { initWelcomeScreen, updateConnectionStatus, hideWelcomeScreen, isWelcomeScreenShown, getPlayerName, getLocalPlayerId, handleDisconnection } from '../ui/WelcomeScreen.js';
@@ -11,6 +11,7 @@ import { initWeaponPickups, updateWeaponPickups, animateWeaponPickups, disposeWe
 import { initMissileSystem, updateMissiles, disposeMissileSystem, setMissileHitCallback } from './Missile.js';
 import { initRespawnTimer, showRespawnTimer, hideRespawnTimer, disposeRespawnTimer } from '../ui/RespawnTimer.js';
 import { initLeaderboard, updateLeaderboard, setLocalPlayerId, disposeLeaderboard } from '../ui/Leaderboard.js';
+import { initRoundTimer, updateRoundTimer, showRoundTransition, disposeRoundTimer } from '../ui/RoundTimer.js';
 import Stats from 'stats.js';
 import * as THREE from 'three';
 
@@ -70,6 +71,9 @@ export async function initGameEngine() {
     // Step 9.3: Initialize leaderboard system
     initLeaderboard();
     
+    // Step 2.4: Initialize round timer system
+    initRoundTimer();
+    
     // Initialize websocket
     initWebSocket();
     
@@ -97,6 +101,9 @@ export async function initGameEngine() {
     
     // Step 9.3: Set up leaderboard callback
     setLeaderboardCallback(handleLeaderboardUpdate);
+    
+    // Step 2.4: Set up round event callback
+    setRoundEventCallback(handleRoundEvent);
     
     // Don't create test player immediately - wait for user to join
     // createTestPlayer();
@@ -351,6 +358,9 @@ export function disposeGameEngine() {
   // Dispose leaderboard (Step 9.3)
   disposeLeaderboard();
   
+  // Dispose round timer (Step 2.4)
+  disposeRoundTimer();
+  
   // Dispose scene and stats
   disposeScene();
 
@@ -368,6 +378,11 @@ function handleGameStateUpdate(gameState) {
   // Step 6.2: Update weapon pickups from server data
   if (gameState.weaponBoxes) {
     updateWeaponPickups(gameState.weaponBoxes);
+  }
+  
+  // Step 2.4: Update round timer from server data
+  if (gameState.round) {
+    updateRoundTimer(gameState.round);
   }
 }
 
@@ -473,6 +488,28 @@ function handleLeaderboardUpdate(leaderboardData) {
   
   // Update the leaderboard display
   updateLeaderboard(leaderboardData, localPlayerId);
+}
+
+// Step 2.4: Handle round events
+function handleRoundEvent(eventData) {
+  console.log(`🎯 Round event: ${eventData.type} - ${eventData.message}`);
+  
+  // Show round transition message
+  if (eventData.message) {
+    showRoundTransition(eventData.message);
+  }
+  
+  // Handle specific event types
+  switch (eventData.type) {
+    case 'roundStarted':
+      console.log(`🎮 Round ${eventData.roundNumber} started with ${eventData.playerCount} players`);
+      break;
+    case 'roundEnded':
+      console.log(`🏁 Round ${eventData.roundNumber} ended - ${eventData.eligiblePlayers} players earned rewards`);
+      break;
+    default:
+      console.log(`🎯 Unknown round event type: ${eventData.type}`);
+  }
 }
 
 // Step 5.3: Export function for debugging interpolation in browser console

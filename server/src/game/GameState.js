@@ -61,9 +61,10 @@ export function addPlayer(playerId, playerName, walletAddress = null) {
     
     // Start round if this is the first active player
     if (getActivePlayerCount() === 1 && !currentRound.isActive) {
-      startNewRound();
+      const roundEvent = startNewRound();
+      return { success: true, roundEvent };
     }
-    return true;
+    return { success: true };
   }
 
   // Create new player
@@ -73,10 +74,11 @@ export function addPlayer(playerId, playerName, walletAddress = null) {
   
   // Start round if this is the first player
   if (getActivePlayerCount() === 1 && !currentRound.isActive) {
-    startNewRound();
+    const roundEvent = startNewRound();
+    return { success: true, roundEvent };
   }
   
-  return true;
+  return { success: true };
 }
 
 export function removePlayer(playerId) {
@@ -280,6 +282,14 @@ export function startNewRound() {
   });
   
   console.log(`🎮 Round ${currentRound.number} started with ${getActivePlayerCount()} active players - ${resetCount} scores reset to 0`);
+  
+  // Return round start event data for broadcasting
+  return {
+    type: 'roundStarted',
+    roundNumber: currentRound.number,
+    playerCount: getActivePlayerCount(),
+    message: `Round ${currentRound.number} has started!`
+  };
 }
 
 export function endCurrentRound() {
@@ -301,6 +311,17 @@ export function endCurrentRound() {
   }
   
   // TODO: Calculate and distribute rewards in Phase 2.8
+  
+  // Return round end event data for broadcasting
+  return {
+    type: 'roundEnded',
+    roundNumber: currentRound.number,
+    summary: roundSummary,
+    eligiblePlayers: eligiblePlayers.length,
+    message: eligiblePlayers.length > 0 
+      ? `Round ${currentRound.number} ended! ${eligiblePlayers.length} players earned rewards.`
+      : `Round ${currentRound.number} ended. No rewards earned this round.`
+  };
 }
 
 export function getRemainingTime() {
@@ -314,14 +335,20 @@ export function getRemainingTime() {
 }
 
 export function checkRoundTimer() {
+  const events = [];
+  
   if (currentRound.isActive && getRemainingTime() <= 0) {
-    endCurrentRound();
+    const endEvent = endCurrentRound();
+    if (endEvent) events.push(endEvent);
     
     // Start new round if players are still active
     if (getActivePlayerCount() > 0) {
-      startNewRound();
+      const startEvent = startNewRound();
+      if (startEvent) events.push(startEvent);
     }
   }
+  
+  return events;
 }
 
 export function getCurrentRound() {
