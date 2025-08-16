@@ -2,6 +2,7 @@
 // Main game controller that manages the game loop, initialization, and coordination between systems
 
 import { Scene } from './Scene.js';
+import { initWebSocket, getSocket, isSocketConnected } from '../network/SocketManager.js';
 import Stats from 'stats.js';
 
 export class GameEngine {
@@ -39,6 +40,9 @@ export class GameEngine {
 
       // Initialize scene
       this.scene = new Scene(this.canvas);
+
+      // Initialize websocket
+      initWebSocket();
       
       // Setup game loop
       this.setupGameLoop();
@@ -60,6 +64,8 @@ export class GameEngine {
     this.gameLoop();
     console.log('Game loop started');
   }
+
+
 
   // Main game loop using requestAnimationFrame
   gameLoop = (currentTime = performance.now()) => {
@@ -174,6 +180,8 @@ export class GameEngine {
       this.scene.dispose();
     }
 
+
+
     // Remove Stats.js display
     if (this.stats && this.stats.dom && this.stats.dom.parentNode) {
       this.stats.dom.parentNode.removeChild(this.stats.dom);
@@ -187,7 +195,8 @@ export class GameEngine {
   getDebugInfo() {
     return {
       deltaTime: this.deltaTime,
-      isRunning: this.isRunning
+      isRunning: this.isRunning,
+      socketConnected: isSocketConnected()
     };
   }
 }
