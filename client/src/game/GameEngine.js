@@ -1,11 +1,12 @@
 // Surr Game - Game Engine
 // Function-based game controller that manages the game loop and coordination
 
-import { initScene, updateScene, renderScene, disposeScene } from './Scene.js';
+import { initScene, updateScene, renderScene, disposeScene, getCamera } from './Scene.js';
 import { initWebSocket, isSocketConnected } from '../network/SocketManager.js';
 import { playerManager } from './Player.js';
 import { initControls, getInputState, isMoving, disposeControls } from './Controls.js';
 import Stats from 'stats.js';
+import * as THREE from 'three';
 
 // Game state
 let canvas = null;
@@ -13,6 +14,11 @@ let isRunning = false;
 let lastTime = 0;
 let deltaTime = 0;
 let stats = null;
+
+// Camera follow state
+let cameraOffset = new THREE.Vector3(0, 15, 20);
+let cameraLookAtOffset = new THREE.Vector3(0, 0, 0);
+let cameraFollowSpeed = 2.0;
 
 // Initialize the game engine
 export async function initGameEngine() {
@@ -85,26 +91,58 @@ function gameLoop(currentTime = performance.now()) {
   requestAnimationFrame(gameLoop);
 }
 
-// Process input for testing (Step 4.2)
+// Process input and update local player movement (Step 4.3)
 function processInput(deltaTime) {
   const input = getInputState();
+  const localPlayer = playerManager.getLocalPlayer();
   
-  // Log input state every few seconds if any keys are pressed (for testing)
-  if (isMoving() || input.shoot) {
-    const now = performance.now();
-    if (!processInput.lastLogTime || now - processInput.lastLogTime > 2000) {
-      console.log('🎮 Input Test - Current active inputs:', {
-        forward: input.forward,
-        backward: input.backward,
-        left: input.left,
-        right: input.right,
-        shoot: input.shoot
-      });
-      processInput.lastLogTime = now;
+  // Update local player movement if exists
+  if (localPlayer) {
+    localPlayer.updateMovement(input, deltaTime);
+    
+    // Update camera to follow local player
+    updateCameraFollow(localPlayer, deltaTime);
+    
+    // Log movement state periodically for debugging
+    if (isMoving() && localPlayer.speed > 0.1) {
+      const now = performance.now();
+      if (!processInput.lastLogTime || now - processInput.lastLogTime > 3000) {
+        console.log('🚗 Player Movement:', {
+          position: {
+            x: localPlayer.position.x.toFixed(2),
+            z: localPlayer.position.z.toFixed(2)
+          },
+          rotation: localPlayer.rotation.y.toFixed(2),
+          speed: localPlayer.speed.toFixed(2)
+        });
+        processInput.lastLogTime = now;
+      }
     }
   }
 }
 processInput.lastLogTime = 0;
+
+// Update camera to follow local player (Step 4.3)
+function updateCameraFollow(player, deltaTime) {
+  const camera = getCamera();
+  if (!camera) return;
+  
+  // Calculate target camera position behind and above the player
+  const targetPosition = player.position.clone();
+  const rotatedOffset = cameraOffset.clone();
+  rotatedOffset.applyEuler(player.rotation);
+  targetPosition.add(rotatedOffset);
+  
+  // Calculate target look-at position (slightly ahead of player)
+  const targetLookAt = player.position.clone();
+  const lookAtOffset = cameraLookAtOffset.clone();
+  lookAtOffset.applyEuler(player.rotation);
+  targetLookAt.add(lookAtOffset);
+  
+  // Smoothly interpolate camera position
+  camera.position.lerp(targetPosition, cameraFollowSpeed * deltaTime);
+  camera.lookAt(targetLookAt);
+}
 
 // Start the game engine
 export function startGameEngine() {
