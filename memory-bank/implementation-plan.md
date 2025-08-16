@@ -315,7 +315,7 @@
 **Objective:** Add walls to contain the playing area.
 
 **Actions:**
-- Add invisible wall colliders around play area perimeter
+- Add visible wall colliders around play area perimeter
 - Create visual boundary indicators (walls or barriers)
 - Set up physics collision for arena boundaries
 - Add collision response to prevent players from escaping

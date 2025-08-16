@@ -131,6 +131,139 @@
             display: none !important;
         }
 
+        /* Step 5.4: Welcome Screen for player name entry */
+        #welcomeScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+
+        .welcome-content {
+            background: rgba(0, 0, 0, 0.8);
+            border: 3px solid #4a90e2;
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .game-title {
+            font-size: 48px;
+            font-weight: bold;
+            color: #4a90e2;
+            margin-bottom: 10px;
+            text-shadow: 0 0 20px rgba(74, 144, 226, 0.5);
+        }
+
+        .game-subtitle {
+            font-size: 18px;
+            color: #ffffff;
+            margin-bottom: 30px;
+            opacity: 0.8;
+        }
+
+        .name-input-group {
+            margin-bottom: 30px;
+        }
+
+        .name-input-label {
+            display: block;
+            font-size: 16px;
+            color: #ffffff;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .name-input {
+            width: 100%;
+            padding: 15px;
+            font-size: 18px;
+            border: 2px solid #4a90e2;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+            text-align: center;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        .name-input:focus {
+            border-color: #74b9ff;
+            box-shadow: 0 0 20px rgba(74, 144, 226, 0.3);
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .name-input::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .join-button {
+            width: 100%;
+            padding: 15px 30px;
+            font-size: 18px;
+            font-weight: bold;
+            color: #ffffff;
+            background: linear-gradient(135deg, #4a90e2, #74b9ff);
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .join-button:hover:not(:disabled) {
+            background: linear-gradient(135deg, #74b9ff, #4a90e2);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(74, 144, 226, 0.4);
+        }
+
+        .join-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .connection-info {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255, 193, 7, 0.1);
+            border: 1px solid #ffc107;
+            border-radius: 8px;
+            font-size: 14px;
+            color: #ffc107;
+        }
+
+        .error-message {
+            margin-top: 15px;
+            padding: 10px;
+            background: rgba(231, 76, 60, 0.1);
+            border: 1px solid #e74c3c;
+            border-radius: 8px;
+            color: #e74c3c;
+            font-size: 14px;
+        }
+
+        .success-message {
+            margin-top: 15px;
+            padding: 10px;
+            background: rgba(46, 204, 113, 0.1);
+            border: 1px solid #2ecc71;
+            border-radius: 8px;
+            color: #2ecc71;
+            font-size: 14px;
+        }
+
         /* Loading indicator */
         .loading {
             display: inline-block;
@@ -165,6 +298,37 @@
     </style>
 </head>
 <body>
+    <!-- Step 5.4: Welcome Screen for name entry -->
+    <div id="welcomeScreen">
+        <div class="welcome-content">
+            <h1 class="game-title">SURR</h1>
+            <p class="game-subtitle">Multiplayer Kart Arena</p>
+            
+            <div class="name-input-group">
+                <label for="playerNameInput" class="name-input-label">Enter Your Name</label>
+                <input 
+                    type="text" 
+                    id="playerNameInput" 
+                    class="name-input" 
+                    placeholder="Your pilot name..."
+                    maxlength="16"
+                    autocomplete="off"
+                >
+            </div>
+            
+            <button id="joinGameButton" class="join-button" disabled>
+                Join Game
+            </button>
+            
+            <div id="connectionInfo" class="connection-info hidden">
+                Connecting to server...
+            </div>
+            
+            <div id="joinErrorMessage" class="error-message hidden"></div>
+            <div id="joinSuccessMessage" class="success-message hidden"></div>
+        </div>
+    </div>
+
     <!-- Game Canvas -->
     <canvas id="gameCanvas"></canvas>
 

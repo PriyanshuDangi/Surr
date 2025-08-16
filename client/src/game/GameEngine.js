@@ -2,9 +2,11 @@
 // Function-based game controller that manages the game loop and coordination
 
 import { initScene, updateScene, renderScene, disposeScene, getCamera } from './Scene.js';
-import { initWebSocket, isSocketConnected, broadcastPlayerPosition, setGameStateCallback } from '../network/SocketManager.js';
+import { initWebSocket, isSocketConnected, broadcastPlayerPosition, setGameStateCallback, addConnectionCallback, addDisconnectionCallback } from '../network/SocketManager.js';
 import { playerManager } from './Player.js';
 import { initControls, getInputState, isMoving, disposeControls } from './Controls.js';
+import { initWelcomeScreen, updateConnectionStatus, hideWelcomeScreen, isWelcomeScreenShown, getPlayerName, getLocalPlayerId, handleDisconnection } from '../ui/WelcomeScreen.js';
+import { initNotifications, showWelcomeNotification, showPlayerJoinedNotification, showPlayerLeftNotification, showConnectionNotification } from '../ui/Notifications.js';
 import Stats from 'stats.js';
 import * as THREE from 'three';
 
@@ -46,14 +48,35 @@ export async function initGameEngine() {
     // Initialize controls (Step 4.2)
     initControls();
     
+    // Step 5.4: Initialize welcome screen
+    initWelcomeScreen();
+    
+    // Step 5.4: Initialize notification system
+    initNotifications();
+    
     // Initialize websocket
     initWebSocket();
+    
+    // Step 5.4: Set up connection status callbacks
+    addConnectionCallback(() => {
+      updateConnectionStatus();
+      showConnectionNotification('Connected to server', 'success');
+    });
+    addDisconnectionCallback((reason) => {
+      handleDisconnection();
+      showConnectionNotification(`Disconnected: ${reason}`, 'error');
+    });
     
     // Step 5.2: Set up game state handler for multiplayer sync
     setGameStateCallback(handleGameStateUpdate);
     
-    // Create test local player to verify Player class functionality
-    createTestPlayer();
+    // Step 5.4: Set up player event callbacks for notifications
+    playerManager.onPlayerJoined = showPlayerJoinedNotification;
+    playerManager.onPlayerLeft = showPlayerLeftNotification;
+    playerManager.onLocalPlayerJoined = showWelcomeNotification;
+    
+    // Don't create test player immediately - wait for user to join
+    // createTestPlayer();
     
     // Setup game loop
     setupGameLoop();
@@ -87,6 +110,9 @@ function gameLoop(currentTime = performance.now()) {
   // Process input (Step 4.2 integration)
   processInput(deltaTime);
   
+  // Step 5.3: Update interpolation for all remote players
+  playerManager.updateInterpolation(deltaTime);
+  
   updateScene(deltaTime);
   renderScene();
 
@@ -96,6 +122,11 @@ function gameLoop(currentTime = performance.now()) {
 
 // Process input and update local player movement (Step 4.3)
 function processInput(deltaTime) {
+  // Step 5.4: Don't process input if welcome screen is shown
+  if (isWelcomeScreenShown()) {
+    return;
+  }
+  
   const input = getInputState();
   const localPlayer = playerManager.getLocalPlayer();
   
@@ -185,8 +216,24 @@ export function disposeGameEngine() {
 
 // Step 5.2: Handle game state updates from server
 function handleGameStateUpdate(gameState) {
-  // Sync all players with server data
-  playerManager.syncWithGameState(gameState);
+  // Step 5.4: Sync players with local player ID for proper identification
+  const localPlayerId = getLocalPlayerId();
+  playerManager.syncWithGameState(gameState, localPlayerId);
+}
+
+// Step 5.4: Create local player when joining game
+function createLocalPlayer() {
+  const playerName = getPlayerName();
+  if (playerName) {
+    console.log('Creating local player:', playerName);
+    const localPlayer = playerManager.createPlayer(
+      'local-player', // This will be updated by server data
+      playerName,
+      { x: 0, y: 1, z: 0 },
+      true // isLocal = true
+    );
+    console.log('Local player created:', localPlayer.name);
+  }
 }
 
 // Create test player for Step 4.1 verification
@@ -213,3 +260,16 @@ function createTestPlayer() {
     return null;
   }
 }
+
+// Step 5.3: Export function for debugging interpolation in browser console
+window.debugInterpolation = function() {
+  const stats = playerManager.getInterpolationStats();
+  console.log('📊 Interpolation Statistics:');
+  console.table(stats);
+  
+  if (Object.keys(stats).length === 0) {
+    console.log('No remote players found. Connect additional clients to test interpolation.');
+  }
+  
+  return stats;
+};

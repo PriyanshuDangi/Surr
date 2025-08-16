@@ -18,6 +18,10 @@ let gameStateStats = {
   lastLogTime: 0
 };
 
+// Step 5.4: Connection status callbacks
+let connectionCallbacks = [];
+let disconnectionCallbacks = [];
+
 export function initWebSocket() {
   const serverUrl = 'http://localhost:5173';
   
@@ -31,11 +35,29 @@ export function initWebSocket() {
   socket.on('connect', () => {
     console.log('Connected to server:', socket.id);
     isConnected = true;
+    
+    // Step 5.4: Notify connection callbacks
+    connectionCallbacks.forEach(callback => {
+      try {
+        callback();
+      } catch (error) {
+        console.error('Connection callback error:', error);
+      }
+    });
   });
 
   socket.on('disconnect', (reason) => {
     console.log('Disconnected from server:', reason);
     isConnected = false;
+    
+    // Step 5.4: Notify disconnection callbacks
+    disconnectionCallbacks.forEach(callback => {
+      try {
+        callback(reason);
+      } catch (error) {
+        console.error('Disconnection callback error:', error);
+      }
+    });
   });
 
   socket.on('connect_error', (error) => {
@@ -160,4 +182,27 @@ function handleGameState(gameState) {
 // Get game state receiving statistics
 export function getGameStateStats() {
   return { ...gameStateStats };
+}
+
+// Step 5.4: Connection status callback management
+export function addConnectionCallback(callback) {
+  connectionCallbacks.push(callback);
+}
+
+export function addDisconnectionCallback(callback) {
+  disconnectionCallbacks.push(callback);
+}
+
+export function removeConnectionCallback(callback) {
+  const index = connectionCallbacks.indexOf(callback);
+  if (index > -1) {
+    connectionCallbacks.splice(index, 1);
+  }
+}
+
+export function removeDisconnectionCallback(callback) {
+  const index = disconnectionCallbacks.indexOf(callback);
+  if (index > -1) {
+    disconnectionCallbacks.splice(index, 1);
+  }
 }
