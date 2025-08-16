@@ -2,10 +2,11 @@
 // Function-based server-side player utilities
 
 // Create a new player object
-export function createPlayer(id, name) {
+export function createPlayer(id, name, walletAddress = null) {
   return {
-    id,
-    name,
+    id,                    // This will be the wallet address for Web3 players, or socket.id for legacy
+    name,                  // Display name (formatted wallet address or regular name)
+    walletAddress,         // Full wallet address for Web3 integration
     position: { x: 0, y: 0, z: 0 },
     rotation: { x: 0, y: 0, z: 0 },
     score: 0,
@@ -34,8 +35,9 @@ export function validatePlayerRotation(rotation) {
 // Serialize player data for network transmission
 export function serializePlayer(player) {
   return {
-    id: player.id,
-    name: player.name,
+    id: player.id,               // Wallet address or socket ID
+    name: player.name,           // Display name (formatted)
+    walletAddress: player.walletAddress, // Full wallet address for Web3 operations
     position: player.position,
     rotation: player.rotation,
     score: player.score,
@@ -49,6 +51,26 @@ export function validatePlayerName(name) {
   return typeof name === 'string' && 
          name.trim().length > 0 && 
          name.trim().length <= 20;
+}
+
+// Validate wallet address (basic Ethereum address format check)
+export function validateWalletAddress(address) {
+  if (!address || typeof address !== 'string') {
+    return false;
+  }
+  
+  // Basic Ethereum address validation
+  // Must start with 0x, be 42 characters long, and contain only hex characters
+  const ethAddressRegex = /^0x[a-fA-F0-9]{40}$/;
+  return ethAddressRegex.test(address);
+}
+
+// Format wallet address for display (first 6 + last 4 characters)
+export function formatWalletAddress(address) {
+  if (!validateWalletAddress(address)) {
+    return address; // Return as-is if invalid
+  }
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
 // Validate weapon type

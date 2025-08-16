@@ -133,8 +133,15 @@ export function broadcastPlayerPosition(playerData) {
     return false;
   }
 
+  // Ensure player data includes wallet address for identification
+  const enhancedPlayerData = {
+    ...playerData,
+    // walletAddress will be included if it exists in playerData
+    // Server will use this for player identification
+  };
+
   // Send the position update
-  socket.emit('playerPosition', playerData);
+  socket.emit('playerPosition', enhancedPlayerData);
   
   // Update tracking state
   lastSentData = { ...playerData };
@@ -208,14 +215,14 @@ export function sendMissileFire(missileData) {
   
   const fireData = {
     missileId: missileData.missileId,
-    shooterId: missileData.shooterId,
+    shooterId: missileData.shooterId, // This will be wallet address
     position: missileData.position,
     direction: missileData.direction,
     timestamp: Date.now()
   };
   
   socket.emit('missileFire', fireData);
-  console.log(`🚀 Sent missile fire event for missile ${missileData.missileId}`);
+  console.log(`🚀 Sent missile fire event for missile ${missileData.missileId} from wallet ${missileData.shooterId}`);
   return true;
 }
 
@@ -228,8 +235,8 @@ export function sendMissileHit(hitData) {
   
   const hitReport = {
     missileId: hitData.missileId,
-    shooterId: hitData.shooterId,
-    targetId: hitData.playerId,
+    shooterId: hitData.shooterId, // Wallet address of shooter
+    targetId: hitData.playerId,   // Wallet address of target
     hitPosition: hitData.hitPosition,
     timestamp: Date.now()
   };

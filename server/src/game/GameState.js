@@ -24,7 +24,7 @@ export function initGameState() {
 
 // Player management functions
 
-export function addPlayer(playerId, playerName) {
+export function addPlayer(playerId, playerName, walletAddress = null) {
   if (players.size >= maxPlayers) {
     console.log(`Cannot add player ${playerName}: Game is full`);
     return false;
@@ -36,9 +36,9 @@ export function addPlayer(playerId, playerName) {
   }
 
   // Use Player.js utility to create standardized player object
-  const player = createPlayer(playerId, playerName);
+  const player = createPlayer(playerId, playerName, walletAddress);
   players.set(playerId, player);
-  console.log(`Player added: ${playerName} (${playerId})`);
+  console.log(`Player added: ${playerName} (${playerId})${walletAddress ? ` with wallet ${walletAddress}` : ''}`);
   return true;
 }
 
