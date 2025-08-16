@@ -10,5 +10,4 @@ alwaysApply: true
 - After adding a major feature or completing a milestone, update memory-bank/@architecture.md.
 - Document code with comments and a README.
 - Keep the codebase very clean and organized  
-- Avoid having files over 200–300 lines of code. Refactor at that point.  
-- Use function based instead of class based for js files
+- Avoid having files over 200–300 lines of code. Refactor at that point.
