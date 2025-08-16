@@ -4,6 +4,7 @@
 import { initScene, updateScene, renderScene, disposeScene } from './Scene.js';
 import { initWebSocket, isSocketConnected } from '../network/SocketManager.js';
 import { playerManager } from './Player.js';
+import { initControls, getInputState, isMoving, disposeControls } from './Controls.js';
 import Stats from 'stats.js';
 
 // Game state
@@ -36,6 +37,9 @@ export async function initGameEngine() {
     // Initialize scene
     initScene(canvas);
 
+    // Initialize controls (Step 4.2)
+    initControls();
+    
     // Initialize websocket
     initWebSocket();
     
@@ -71,12 +75,36 @@ function gameLoop(currentTime = performance.now()) {
   deltaTime = (currentTime - lastTime) / 1000;
   lastTime = currentTime;
 
+  // Process input (Step 4.2 integration)
+  processInput(deltaTime);
+  
   updateScene(deltaTime);
   renderScene();
 
   stats.end();
   requestAnimationFrame(gameLoop);
 }
+
+// Process input for testing (Step 4.2)
+function processInput(deltaTime) {
+  const input = getInputState();
+  
+  // Log input state every few seconds if any keys are pressed (for testing)
+  if (isMoving() || input.shoot) {
+    const now = performance.now();
+    if (!processInput.lastLogTime || now - processInput.lastLogTime > 2000) {
+      console.log('🎮 Input Test - Current active inputs:', {
+        forward: input.forward,
+        backward: input.backward,
+        left: input.left,
+        right: input.right,
+        shoot: input.shoot
+      });
+      processInput.lastLogTime = now;
+    }
+  }
+}
+processInput.lastLogTime = 0;
 
 // Start the game engine
 export function startGameEngine() {
@@ -112,6 +140,10 @@ export function disposeGameEngine() {
   console.log('Disposing game engine...');
   stopGameEngine();
   
+  // Dispose controls (Step 4.2)
+  disposeControls();
+  
+  // Dispose scene and stats
   disposeScene();
 
   if (stats && stats.dom && stats.dom.parentNode) {
@@ -151,11 +183,16 @@ function createTestPlayer() {
 
 // Get debug information
 export function getDebugInfo() {
+  const input = getInputState();
   return {
     deltaTime,
     isRunning,
     socketConnected: isSocketConnected(),
     playersCount: playerManager.getAllPlayers().length,
-    localPlayer: playerManager.getLocalPlayer()?.name || 'None'
+    localPlayer: playerManager.getLocalPlayer()?.name || 'None',
+    inputState: {
+      isMoving: isMoving(),
+      activeInputs: Object.entries(input).filter(([key, value]) => value === true).map(([key]) => key)
+    }
   };
 }

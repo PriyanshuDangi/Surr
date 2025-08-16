@@ -15,7 +15,8 @@ export class Player {
     // Position and movement properties
     this.position = new THREE.Vector3(position.x, position.y, position.z);
     this.rotation = new THREE.Euler(0, 0, 0);
-    this.velocity = new THREE.Vector3(0, 0, 0);
+    this.speed = 0; // Current movement speed as a number
+    this.maxSpeed = 15; // Maximum speed
     
     // Game state properties
     this.score = 0;
@@ -107,6 +108,11 @@ export class Player {
     this.score = score;
   }
   
+  // Update player speed
+  updateSpeed(speed) {
+    this.speed = speed;
+  }
+  
   // Update weapon state
   updateWeapon(weapon) {
     this.weapon = weapon;
@@ -147,7 +153,8 @@ export class Player {
         x: this.rotation.x,
         y: this.rotation.y,
         z: this.rotation.z
-      }
+      },
+      speed: this.speed
     };
   }
   
