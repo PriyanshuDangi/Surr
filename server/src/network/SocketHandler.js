@@ -10,7 +10,8 @@ import {
   getLeaderboard,
   updatePlayerPosition,
   updatePlayerWeapon,
-  setPlayerAliveStatus
+  setPlayerAliveStatus,
+  handleWeaponPickupCollection
 } from '../game/GameState.js';
 
 // Connected clients state
@@ -106,9 +107,13 @@ function setupEventListeners(socket) {
     handlePlayerPosition(socket, data);
   });
 
+  // Handle weapon pickup collection
+  socket.on('weaponPickupCollection', (data) => {
+    handleWeaponPickupCollectionEvent(socket, data);
+  });
+
   // Placeholder for future events:
-  // - missileHit  
-  // - weaponboxCollected
+  // - missileHit
 }
 
 // Handle player disconnection
@@ -216,6 +221,37 @@ function handlePlayerPosition(socket, data) {
     console.log(`📍 Position updates received: ${handlePlayerPosition.updateCount} in last 5s from ${getPlayerCount()} players`);
     handlePlayerPosition.lastLogTime = now;
     handlePlayerPosition.updateCount = 0;
+  }
+}
+
+// Handle weapon pickup collection events
+function handleWeaponPickupCollectionEvent(socket, data) {
+  const playerId = socket.id;
+  const { weaponBoxId } = data || {};
+  
+  if (!weaponBoxId) {
+    console.log(`Invalid weapon pickup data from player ${playerId}`);
+    socket.emit('weaponPickupResponse', {
+      success: false,
+      reason: 'Invalid weapon box ID'
+    });
+    return;
+  }
+  
+  // Attempt to collect the weapon pickup
+  const result = handleWeaponPickupCollection(playerId, weaponBoxId);
+  
+  // Send response to the requesting client
+  socket.emit('weaponPickupResponse', {
+    success: result.success,
+    reason: result.reason || null,
+    weapon: result.weapon || null,
+    weaponBoxId: weaponBoxId
+  });
+  
+  // If collection was successful, broadcast updated game state
+  if (result.success) {
+    broadcastGameState();
   }
 }
 
