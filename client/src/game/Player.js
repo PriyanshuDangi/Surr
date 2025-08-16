@@ -32,6 +32,14 @@ export class Player {
     this.isAlive = true;
     this.weapon = null; // null or 'missile'
     
+    // Step 5.3: Interpolation system for remote players
+    this.interpolationBuffer = [];
+    this.maxBufferSize = 5; // Keep last 5 position updates
+    this.interpolationDelay = 100; // 100ms delay for smooth interpolation
+    this.targetPosition = new THREE.Vector3();
+    this.targetRotation = new THREE.Euler();
+    this.lastUpdateTime = 0;
+    
     // Three.js mesh object
     this.mesh = null;
     this.nameTag = null;
@@ -95,9 +103,130 @@ export class Player {
   
   // Update player position in scene
   updatePosition(position, rotation) {
-    // Update internal position and rotation
-    this.position.set(position.x, position.y, position.z);
-    this.rotation.set(rotation.x, rotation.y, rotation.z);
+    if (this.isLocal) {
+      // Local player: direct update (no interpolation needed)
+      this.position.set(position.x, position.y, position.z);
+      this.rotation.set(rotation.x, rotation.y, rotation.z);
+      
+      // Update mesh position and rotation
+      if (this.mesh) {
+        this.mesh.position.copy(this.position);
+        this.mesh.rotation.copy(this.rotation);
+      }
+      
+      // Update name tag position
+      if (this.nameTag) {
+        this.nameTag.position.copy(this.position);
+        this.nameTag.position.y += 3;
+      }
+    } else {
+      // Remote player: add to interpolation buffer
+      this.addPositionToBuffer(position, rotation);
+    }
+  }
+  
+  // Step 5.3: Add position update to interpolation buffer for remote players
+  addPositionToBuffer(position, rotation) {
+    const currentTime = performance.now();
+    
+    // Create position update entry
+    const update = {
+      position: { x: position.x, y: position.y, z: position.z },
+      rotation: { x: rotation.x, y: rotation.y, z: rotation.z },
+      timestamp: currentTime
+    };
+    
+    // Add to buffer
+    this.interpolationBuffer.push(update);
+    this.lastUpdateTime = currentTime;
+    
+    // Keep buffer size manageable
+    if (this.interpolationBuffer.length > this.maxBufferSize) {
+      this.interpolationBuffer.shift(); // Remove oldest entry
+    }
+    
+    // Handle large position jumps (teleportation detection)
+    if (this.interpolationBuffer.length >= 2) {
+      const latest = this.interpolationBuffer[this.interpolationBuffer.length - 1];
+      const previous = this.interpolationBuffer[this.interpolationBuffer.length - 2];
+      
+      const distance = Math.sqrt(
+        Math.pow(latest.position.x - previous.position.x, 2) +
+        Math.pow(latest.position.y - previous.position.y, 2) +
+        Math.pow(latest.position.z - previous.position.z, 2)
+      );
+      
+      // If player teleported (distance > 20 units), clear buffer and snap to new position
+      if (distance > 20) {
+        console.log(`Player ${this.name} teleported (distance: ${distance.toFixed(2)}), snapping to new position`);
+        this.interpolationBuffer = [update];
+        this.snapToPosition(latest);
+      }
+    }
+  }
+  
+  // Step 5.3: Snap player to a specific position (for teleportation cases)
+  snapToPosition(update) {
+    this.position.set(update.position.x, update.position.y, update.position.z);
+    this.rotation.set(update.rotation.x, update.rotation.y, update.rotation.z);
+    
+    if (this.mesh) {
+      this.mesh.position.copy(this.position);
+      this.mesh.rotation.copy(this.rotation);
+    }
+    
+    if (this.nameTag) {
+      this.nameTag.position.copy(this.position);
+      this.nameTag.position.y += 3;
+    }
+  }
+  
+  // Step 5.3: Update interpolated position for remote players
+  updateInterpolation(deltaTime) {
+    // Only interpolate for remote players
+    if (this.isLocal || this.interpolationBuffer.length < 2) {
+      return;
+    }
+    
+    const currentTime = performance.now();
+    const renderTime = currentTime - this.interpolationDelay;
+    
+    // Find the two position updates to interpolate between
+    let fromUpdate = null;
+    let toUpdate = null;
+    
+    for (let i = 0; i < this.interpolationBuffer.length - 1; i++) {
+      if (this.interpolationBuffer[i].timestamp <= renderTime && 
+          this.interpolationBuffer[i + 1].timestamp >= renderTime) {
+        fromUpdate = this.interpolationBuffer[i];
+        toUpdate = this.interpolationBuffer[i + 1];
+        break;
+      }
+    }
+    
+    // Fallback: use the two most recent updates
+    if (!fromUpdate || !toUpdate) {
+      if (this.interpolationBuffer.length >= 2) {
+        fromUpdate = this.interpolationBuffer[this.interpolationBuffer.length - 2];
+        toUpdate = this.interpolationBuffer[this.interpolationBuffer.length - 1];
+      } else {
+        return;
+      }
+    }
+    
+    // Calculate interpolation factor
+    const timeDiff = toUpdate.timestamp - fromUpdate.timestamp;
+    const factor = timeDiff > 0 ? Math.min(1, (renderTime - fromUpdate.timestamp) / timeDiff) : 1;
+    
+    // Interpolate position
+    this.position.x = fromUpdate.position.x + (toUpdate.position.x - fromUpdate.position.x) * factor;
+    this.position.y = fromUpdate.position.y + (toUpdate.position.y - fromUpdate.position.y) * factor;
+    this.position.z = fromUpdate.position.z + (toUpdate.position.z - fromUpdate.position.z) * factor;
+    
+    // Interpolate rotation (simple linear interpolation for euler angles)
+    this.rotation.x = fromUpdate.rotation.x + (toUpdate.rotation.x - fromUpdate.rotation.x) * factor;
+    this.rotation.y = fromUpdate.rotation.y + (toUpdate.rotation.y - fromUpdate.rotation.y) * factor;
+    this.rotation.z = fromUpdate.rotation.z + (toUpdate.rotation.z - fromUpdate.rotation.z) * factor;
     
     // Update mesh position and rotation
     if (this.mesh) {
@@ -109,6 +238,20 @@ export class Player {
     if (this.nameTag) {
       this.nameTag.position.copy(this.position);
       this.nameTag.position.y += 3;
+    }
+    
+    // Clean up old buffer entries
+    this.cleanupInterpolationBuffer(renderTime);
+  }
+  
+  // Step 5.3: Clean up old entries from interpolation buffer
+  cleanupInterpolationBuffer(renderTime) {
+    // Remove entries older than 1 second from render time
+    const cutoffTime = renderTime - 1000;
+    
+    while (this.interpolationBuffer.length > 1 && 
+           this.interpolationBuffer[0].timestamp < cutoffTime) {
+      this.interpolationBuffer.shift();
     }
   }
   
@@ -224,8 +367,19 @@ export class Player {
     };
   }
   
+  // Step 5.3: Handle disconnection gracefully for interpolation
+  handleDisconnection() {
+    // Clear interpolation buffer when player disconnects
+    this.interpolationBuffer = [];
+    this.lastUpdateTime = 0;
+    console.log(`Player ${this.name} disconnected, cleared interpolation buffer`);
+  }
+  
   // Cleanup method
   dispose() {
+    // Clear interpolation data
+    this.handleDisconnection();
+    
     if (this.mesh) {
       removeObjectFromScene(this.mesh);
       this.mesh.geometry.dispose();
@@ -306,6 +460,31 @@ export class PlayerManager {
     }
   }
   
+  // Step 5.3: Update interpolation for all remote players
+  updateInterpolation(deltaTime) {
+    this.players.forEach(player => {
+      if (!player.isLocal) {
+        player.updateInterpolation(deltaTime);
+      }
+    });
+  }
+  
+  // Step 5.3: Get interpolation statistics for debugging
+  getInterpolationStats() {
+    const stats = {};
+    this.players.forEach((player, id) => {
+      if (!player.isLocal) {
+        stats[id] = {
+          name: player.name,
+          bufferSize: player.interpolationBuffer.length,
+          lastUpdateTime: player.lastUpdateTime,
+          timeSinceLastUpdate: performance.now() - player.lastUpdateTime
+        };
+      }
+    });
+    return stats;
+  }
+  
   // Update player score
   updatePlayerScore(id, score) {
     const player = this.players.get(id);
@@ -315,7 +494,7 @@ export class PlayerManager {
   }
 
   // Step 5.2: Sync players with server game state
-  syncWithGameState(gameState) {
+  syncWithGameState(gameState, localPlayerId = null) {
     if (!gameState || !gameState.players) {
       return;
     }
@@ -326,42 +505,70 @@ export class PlayerManager {
     gameState.players.forEach(serverPlayer => {
       serverPlayerIds.add(serverPlayer.id);
       
-      // Skip local player (managed by client input)
-      if (this.localPlayer && serverPlayer.id === this.localPlayer.id) {
-        return;
-      }
-
       const existingPlayer = this.players.get(serverPlayer.id);
       
+      // Step 5.4: Determine if this is the local player
+      const isLocalPlayer = localPlayerId ? serverPlayer.id === localPlayerId : 
+                           (this.localPlayer && serverPlayer.id === this.localPlayer.id);
+      
       if (existingPlayer) {
-        // Update existing remote player
-        existingPlayer.updatePosition(serverPlayer.position, serverPlayer.rotation);
+        // Update existing player
+        if (!isLocalPlayer) {
+          // Only update position for remote players (local player is managed by client input)
+          existingPlayer.updatePosition(serverPlayer.position, serverPlayer.rotation);
+        }
         existingPlayer.updateScore(serverPlayer.score);
         existingPlayer.updateWeapon(serverPlayer.weapon);
         existingPlayer.updateAliveStatus(serverPlayer.isAlive);
       } else {
-        // Create new remote player
-        this.createPlayer(
+        // Create new player
+        const newPlayer = this.createPlayer(
           serverPlayer.id,
           serverPlayer.name,
           serverPlayer.position,
-          false // isLocal = false for remote players
+          isLocalPlayer
         );
-        console.log(`✨ Remote player joined: ${serverPlayer.name}`);
+        
+        if (isLocalPlayer) {
+          console.log(`✨ Local player joined: ${serverPlayer.name}`);
+          this.localPlayer = newPlayer;
+          // Trigger welcome notification through callback
+          if (this.onLocalPlayerJoined) {
+            this.onLocalPlayerJoined(serverPlayer.name);
+          }
+        } else {
+          console.log(`✨ Remote player joined: ${serverPlayer.name}`);
+          // Trigger join notification through callback
+          if (this.onPlayerJoined) {
+            this.onPlayerJoined(serverPlayer.name);
+          }
+        }
       }
     });
 
     // Remove players that are no longer on server (disconnected)
     const playersToRemove = [];
     this.players.forEach((player, id) => {
-      if (!player.isLocal && !serverPlayerIds.has(id)) {
+      if (!serverPlayerIds.has(id)) {
         playersToRemove.push(id);
       }
     });
 
     playersToRemove.forEach(id => {
       const player = this.players.get(id);
-      console.log(`👋 Remote player left: ${player ? player.name : id}`);
+      const isLocal = player === this.localPlayer;
+      console.log(`👋 ${isLocal ? 'Local' : 'Remote'} player left: ${player ? player.name : id}`);
+      
+      // Trigger leave notification through callback
+      if (player && !isLocal && this.onPlayerLeft) {
+        this.onPlayerLeft(player.name);
+      }
+      
+      // Handle disconnection before removal (Step 5.3)
+      if (player && !player.isLocal) {
+        player.handleDisconnection();
+      }
+      
       this.removePlayer(id);
     });
   }

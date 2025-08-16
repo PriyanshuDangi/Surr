@@ -72,22 +72,32 @@ export function getCamera() { /* ... */ }
 - **Lighting**: Ambient + directional lighting
 - **Renderer**: WebGL with shadow mapping
 
-#### `game/Player.js` - Player State Management
-**Purpose**: Client-side player representation and management
+#### `game/Player.js` - Player State Management & Interpolation
+**Purpose**: Client-side player representation with advanced networking features
 ```javascript
-export function createPlayer(id, name, position) { /* ... */ }
-export function updatePlayerPosition(id, position, rotation) { /* ... */ }
+export class Player { /* Player instance with interpolation */ }
+export class PlayerManager { /* Manages all players */ }
+export const playerManager = /* Singleton instance */
 ```
 
-**Key Functions**:
-- `createPlayer()` - Create new player object
-- `getPlayer()`/`getAllPlayers()` - Access player data
-- `updatePlayerPosition()` - Update player transform
-- `removePlayer()` - Clean up player
+**Key Features**:
+- **Class-based Player objects** - Position, rotation, movement, visual mesh
+- **PlayerManager singleton** - Centralized player lifecycle management
+- **Client-side interpolation** - Smooth remote player movement (Step 5.3)
+- **Local vs Remote separation** - Different update logic for each type
+- **Network synchronization** - Handles server game state updates
 
-**State Storage**:
-- Uses `Map<string, object>` for efficient player lookup
-- Each player has: id, name, position, rotation, score, isAlive, weapon
+**Interpolation System** (Step 5.3):
+- **Buffer system**: Maintains 5 recent position updates per remote player
+- **Linear interpolation**: 100ms delay for smooth movement between updates
+- **Teleportation detection**: Handles large position jumps (>20 units)
+- **Cleanup system**: Automatic buffer management and disconnection handling
+
+**Player Lifecycle**:
+- `createPlayer()` - Create player with mesh, nametag, interpolation buffer
+- `syncWithGameState()` - Update all players from server data
+- `updateInterpolation()` - Smooth remote player movement
+- `removePlayer()` - Clean disposal with memory management
 
 #### `game/Controls.js` - Input Handling
 **Purpose**: Keyboard/mouse input processing
@@ -107,6 +117,44 @@ export function getInputState() { /* ... */ }
 - Returns normalized input values for smooth movement
 
 ### User Interface
+
+#### `ui/WelcomeScreen.js` - Player Join Interface (Step 5.4)
+**Purpose**: Beautiful welcome screen for player name entry and game joining
+```javascript
+export function initWelcomeScreen() { /* ... */ }
+export function handleJoinGame() { /* ... */ }
+```
+
+**Key Features**:
+- **Modern UI design** - Fullscreen welcome interface with game branding
+- **Name validation** - Real-time validation (2-16 characters)
+- **Connection feedback** - Real-time server connection status
+- **Join system** - Sends player name to server and handles responses
+- **Error handling** - Graceful handling of join failures and timeouts
+
+**State Management**:
+- Tracks welcome screen visibility, player name, joining state
+- Manages DOM elements and event listeners
+- Stores server-assigned player ID for proper identification
+
+#### `ui/Notifications.js` - Visual Feedback System (Step 5.4)
+**Purpose**: Toast-style notifications for game events
+```javascript
+export function showNotification(message, type, duration) { /* ... */ }
+export function showPlayerJoinedNotification(name) { /* ... */ }
+```
+
+**Key Features**:
+- **Toast notifications** - Modern slide-in notifications with animations
+- **Multiple types** - Success, error, info, join, leave notifications
+- **Queue system** - Handles multiple notifications gracefully
+- **Auto-dismiss** - Configurable duration with smooth fade-out
+
+**Event Types**:
+- Player join/leave events
+- Connection status changes
+- Welcome messages
+- Error notifications
 
 #### `ui/UI.js` - General UI Utilities
 **Purpose**: Common UI functions and connection status
@@ -134,22 +182,30 @@ export function showLeaderboard() { /* ... */ }
 
 ### Networking
 
-#### `network/SocketManager.js` - WebSocket Communication
-**Purpose**: Simple Socket.IO client wrapper
+#### `network/SocketManager.js` - Advanced WebSocket Communication
+**Purpose**: Sophisticated Socket.IO client with optimizations and callbacks
 ```javascript
 export function initWebSocket() { /* ... */ }
-export function getSocket() { /* ... */ }
+export function broadcastPlayerPosition(data) { /* ... */ }
+export function addConnectionCallback(callback) { /* ... */ }
 ```
 
-**Key Functions**:
-- `initWebSocket()` - Connect to server with retry logic
-- `getSocket()` - Get socket instance for sending messages
-- `isSocketConnected()` - Check connection status
+**Key Features** (Steps 5.1-5.4):
+- **Optimized position broadcasting** - Throttled updates with change detection
+- **Connection callbacks** - UI integration for status updates
+- **Game state handling** - Centralized server data processing
+- **Join/leave system** - Player name-based joining with server responses
 
-**Features**:
-- **Simple connection** - no complex reconnection logic
-- **Single retry** - attempts reconnection once on error
-- **Connection status** - tracks connected state
+**Position Broadcasting** (Step 5.1):
+- **Throttling**: 50ms minimum interval between sends
+- **Change detection**: Only sends meaningful position/rotation changes
+- **Thresholds**: 0.1 units position, 0.05 radians rotation
+
+**Network Optimizations**:
+- **Delta compression** - Only send changes, not full state
+- **Connection state tracking** - Real-time status monitoring
+- **Retry logic** - Single reconnection attempt with timeout
+- **Performance logging** - Statistics for debugging
 
 ---
 
@@ -219,64 +275,87 @@ export function collectWeaponBox(id) { /* ... */ }
 
 ### Networking
 
-#### `network/SocketHandler.js` - Socket Event Management
-**Purpose**: Handle all client-server communication
+#### `network/SocketHandler.js` - Advanced Socket Event Management
+**Purpose**: Handle all client-server communication with optimized broadcasting
 ```javascript
 export function handleConnection(socket) { /* ... */ }
 export function broadcastGameState() { /* ... */ }
+export function handleJoinGame(socket, data) { /* ... */ }
 ```
 
-**Key Functions**:
-- `initSocketHandler()` - Initialize with Socket.IO instance
-- `handleConnection()` - New client connection setup
-- `broadcastGameState()` - Send updates to all clients
-- `broadcastLeaderboard()` - Send score updates
+**Key Features** (Steps 5.1-5.4):
+- **Server tick system** - 20Hz game state broadcasting
+- **Join/leave handling** - Complete player lifecycle management
+- **Position synchronization** - Optimized player movement updates
+- **Connection management** - Client tracking with metadata
+
+**Broadcasting System** (Step 5.2):
+- **20Hz tick rate** - 50ms intervals for smooth updates
+- **Conditional broadcasting** - Only when players are connected
+- **State packaging** - Efficient game state serialization
+- **Performance logging** - Broadcast statistics and monitoring
 
 **Event Handling**:
-- **Connection/Disconnection** - Player lifecycle
-- **Join Game** - Name-based joining with validation
-- **Future events** - playerPosition, missileHit, weaponboxCollected
+- **Connection/Disconnection** - Player lifecycle with cleanup
+- **Join Game** - Name-based joining with validation and responses
+- **Player Position** - Optimized position updates with throttling
+- **Future events** - Ready for missileHit, weaponboxCollected
 
 **State Management**:
-- `connectedClients` - Map of socket connections
-- **No server-side validation** - client authoritative approach
+- `connectedClients` - Map with socket metadata (playerName, connected state)
+- **Server tick interval** - Managed broadcasting lifecycle
+- **Client authoritative** - Trusts client position data for performance
 
 ---
 
 ## Data Flow Architecture
 
-### Client → Server
-1. **Connection**: Client connects via Socket.IO
-2. **Join Game**: Send player name, receive player ID
-3. **Position Updates**: Send position/rotation changes only
-4. **Hit Reports**: Client reports missile hits (no validation)
-5. **Weapon Collection**: Client reports pickup collection
+### Client → Server (Enhanced in Phase 5)
+1. **Connection**: Client connects via Socket.IO with retry logic
+2. **Join Game**: Send player name, receive player ID and welcome message
+3. **Position Updates**: Optimized throttled updates (50ms intervals, change detection)
+4. **Hit Reports**: Client reports missile hits (no validation) [Future]
+5. **Weapon Collection**: Client reports pickup collection [Future]
 
-### Server → Client
+### Server → Client (Enhanced in Phase 5)
 1. **Connection Confirmation**: Welcome message with client ID
-2. **Game State Broadcasts**: Player positions, counts, status
-3. **Leaderboard Updates**: Score changes and rankings
-4. **Weapon Box Updates**: Availability status
+2. **Game State Broadcasts**: 20Hz server tick with all player data
+3. **Join Responses**: Success/failure feedback for join attempts
+4. **Leaderboard Updates**: Score changes and rankings [Future]
+5. **Weapon Box Updates**: Availability status [Future]
 
-### State Synchronization
-- **Event-driven updates** - only send changes, not continuous data
-- **Client authoritative** - server trusts client hit detection
-- **Broadcast patterns** - state changes sent to all clients
-- **No interpolation** - simple position updates
+### Advanced State Synchronization (Phase 5)
+- **Client-side interpolation** - Smooth remote player movement with 100ms delay
+- **Optimized networking** - Throttled updates with change detection thresholds
+- **Event-driven updates** - Position changes only when meaningful
+- **Server tick system** - 20Hz broadcasting for consistent updates
+- **Player lifecycle** - Complete join/leave handling with visual feedback
+- **Connection management** - Real-time status tracking and UI updates
+
+### Network Optimization Features
+- **Position throttling** - 50ms minimum intervals, change detection
+- **Interpolation buffering** - 5-update buffer per remote player
+- **Teleportation handling** - Large jump detection (>20 units)
+- **Memory management** - Automatic buffer cleanup and player disposal
 
 ---
 
 ## File Dependencies
 
-### Client Dependency Graph
+### Client Dependency Graph (Updated Phase 5)
 ```
 main.js
 ├── GameEngine.js
 │   ├── Scene.js (Three.js, OrbitControls)
-│   ├── SocketManager.js (Socket.IO)
+│   ├── SocketManager.js (Socket.IO with optimizations)
+│   ├── Player.js (with interpolation)
+│   ├── Controls.js
+│   ├── WelcomeScreen.js (Step 5.4)
+│   ├── Notifications.js (Step 5.4)
 │   └── Stats.js
-├── Player.js
-├── Controls.js
+├── tests/
+│   ├── interpolation-test.js (Step 5.3)
+│   └── join-leave-test.js (Step 5.4)
 ├── UI.js
 └── Leaderboard.js
 ```
@@ -308,11 +387,14 @@ server.js
 - **Minimal validation**: Trust client for performance
 - **Direct function calls**: No method dispatch overhead
 
-### Network Optimizations
-- **Change-based updates**: Only send position changes
-- **No velocity sync**: Client handles movement prediction
-- **Batch broadcasts**: Single update to all clients
-- **Simple protocol**: Minimal message structure
+### Network Optimizations (Enhanced Phase 5)
+- **Optimized position broadcasting**: 50ms throttling with change detection
+- **Client-side interpolation**: Smooth remote player movement
+- **Server tick system**: 20Hz broadcasting for consistent updates
+- **Change-based updates**: Only send meaningful position/rotation changes
+- **Connection callbacks**: Real-time UI status updates
+- **Memory management**: Automatic cleanup of disconnected players
+- **Buffer management**: Efficient interpolation buffer handling
 
 ---
 
@@ -337,4 +419,29 @@ server.js
 - **Network tab** - monitor Socket.IO messages
 - **Function call stack** - easier to trace than class methods
 
-This architecture provides a solid foundation for the multiplayer kart game while maintaining simplicity and performance.
+---
+
+## Phase 5 Testing & Debug Tools
+
+### Browser Console Functions
+- **`window.debugInterpolation()`** - Display interpolation statistics for all remote players
+- **`window.testInterpolation()`** - Run automated interpolation buffer tests
+- **`window.testJoinLeave()`** - Validate join/leave system functionality
+
+### Testing Files
+- **`tests/interpolation-test.js`** - Comprehensive interpolation system validation
+- **`tests/join-leave-test.js`** - Player lifecycle and UI validation tests
+
+### Debug Information
+- **Interpolation stats**: Buffer size, last update times, time since updates
+- **Network stats**: Position broadcast counts, game state receives
+- **Player tracking**: Join/leave events with console logging
+- **Connection monitoring**: Real-time status in welcome screen
+
+### Performance Monitoring
+- **Stats.js integration**: FPS and frame time monitoring
+- **Network throttling**: Position update frequency tracking
+- **Memory management**: Player disposal and buffer cleanup logging
+- **Server tick statistics**: Broadcast frequency and player counts
+
+This enhanced architecture provides a robust foundation for the multiplayer kart game with advanced networking features, smooth client-side interpolation, and comprehensive player lifecycle management.
