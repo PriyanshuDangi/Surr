@@ -1,0 +1,13 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# IMPORTANT:
+- emphasize modularity (multiple files) and discourage a monolith (one giant file) in javascript.
+- Always read memory-bank/architecture.md before writing any code. 
+- Always read memory-bank/game-design-document.md before writing any code.
+- After adding a major feature or completing a milestone, update memory-bank/@architecture.md.
+- Document code with comments and a README.
+- Keep the codebase very clean and organized  
+- Avoid having files over 200–300 lines of code. Refactor at that point.  
