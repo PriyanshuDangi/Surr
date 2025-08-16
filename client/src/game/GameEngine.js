@@ -2,12 +2,13 @@
 // Function-based game controller that manages the game loop and coordination
 
 import { initScene, updateScene, renderScene, disposeScene, getCamera } from './Scene.js';
-import { initWebSocket, isSocketConnected, broadcastPlayerPosition, setGameStateCallback, addConnectionCallback, addDisconnectionCallback, sendWeaponPickupCollection } from '../network/SocketManager.js';
+import { initWebSocket, isSocketConnected, broadcastPlayerPosition, setGameStateCallback, addConnectionCallback, addDisconnectionCallback, sendWeaponPickupCollection, sendMissileFire, sendMissileHit } from '../network/SocketManager.js';
 import { playerManager } from './Player.js';
 import { initControls, getInputState, isMoving, disposeControls } from './Controls.js';
 import { initWelcomeScreen, updateConnectionStatus, hideWelcomeScreen, isWelcomeScreenShown, getPlayerName, getLocalPlayerId, handleDisconnection } from '../ui/WelcomeScreen.js';
 import { initNotifications, showWelcomeNotification, showPlayerJoinedNotification, showPlayerLeftNotification, showConnectionNotification } from '../ui/Notifications.js';
 import { initWeaponPickups, updateWeaponPickups, animateWeaponPickups, disposeWeaponPickups, checkWeaponPickupCollisions, attemptLocalPickupCollection } from './WeaponPickups.js';
+import { initMissileSystem, updateMissiles, disposeMissileSystem, setMissileHitCallback } from './Missile.js';
 import Stats from 'stats.js';
 import * as THREE from 'three';
 
@@ -57,6 +58,9 @@ export async function initGameEngine() {
     
     // Step 6.2: Initialize weapon pickup visualization system
     initWeaponPickups();
+    
+    // Step 7.1: Initialize missile system
+    initMissileSystem();
     
     // Initialize websocket
     initWebSocket();
@@ -120,6 +124,9 @@ function gameLoop(currentTime = performance.now()) {
   // Step 6.2: Animate weapon pickups
   animateWeaponPickups(deltaTime);
   
+  // Step 7.1: Update missiles
+  updateMissiles(deltaTime);
+  
   updateScene(deltaTime);
   renderScene();
 
@@ -144,6 +151,9 @@ function processInput(deltaTime) {
     // Step 6.3: Check for weapon pickup collisions (local player only)
     checkWeaponPickupCollision(localPlayer);
     
+    // Step 7.2: Handle missile firing
+    handleMissileFiring(localPlayer, input);
+    
     // Update camera to follow local player
     updateCameraFollow(localPlayer, deltaTime);
     
@@ -161,6 +171,10 @@ processInput.lastLogTime = 0;
 let lastCollectedPickupId = null;
 let lastCollectionTime = 0;
 const COLLECTION_COOLDOWN = 500; // 500ms cooldown between collections
+
+// Step 7.2: Missile firing state to prevent spam
+let lastFireTime = 0;
+const FIRE_COOLDOWN = 300; // 300ms cooldown between shots
 
 // Step 6.3: Check for weapon pickup collision (local player only)
 function checkWeaponPickupCollision(localPlayer) {
@@ -197,6 +211,57 @@ function checkWeaponPickupCollision(localPlayer) {
         // Pickup will be restored by game state sync if server didn't receive the request
       }
     }
+  }
+}
+
+// Step 7.2: Handle missile firing input
+function handleMissileFiring(localPlayer, input) {
+  // Only process firing if connected to server
+  if (!isSocketConnected()) {
+    return;
+  }
+  
+  // Check if spacebar is pressed
+  if (input.shoot) {
+    const currentTime = Date.now();
+    
+    // Prevent spam firing with cooldown
+    if (currentTime - lastFireTime < FIRE_COOLDOWN) {
+      return;
+    }
+    
+    // Attempt to fire missile
+    const missileData = localPlayer.fireMissile();
+    
+    if (missileData) {
+      // Update fire tracking
+      lastFireTime = currentTime;
+      
+      // Set up hit callback for this local missile (Step 7.3)
+      setMissileHitCallback(missileData.missileId, (hitResult) => {
+        handleMissileHit(hitResult);
+      });
+      
+      // Send missile fire event to server for broadcasting
+      const serverSuccess = sendMissileFire(missileData);
+      
+      if (!serverSuccess) {
+        console.log(`Failed to send missile fire event to server for missile ${missileData.missileId}`);
+      }
+    }
+  }
+}
+
+// Step 7.4: Handle missile hit and report to server
+function handleMissileHit(hitResult) {
+  console.log(`🎯 Missile hit detected:`, hitResult);
+  console.log(`💥 Player ${hitResult.playerName} hit by missile ${hitResult.missileId} from player ${hitResult.shooterId}`);
+  
+  // Send hit report to server for elimination processing
+  const serverSuccess = sendMissileHit(hitResult);
+  
+  if (!serverSuccess) {
+    console.log(`Failed to send missile hit report to server for missile ${hitResult.missileId}`);
   }
 }
 
@@ -261,6 +326,9 @@ export function disposeGameEngine() {
   
   // Dispose weapon pickups (Step 6.2)
   disposeWeaponPickups();
+  
+  // Dispose missile system (Step 7.1)
+  disposeMissileSystem();
   
   // Dispose scene and stats
   disposeScene();

@@ -11,7 +11,8 @@ import {
   updatePlayerPosition,
   updatePlayerWeapon,
   setPlayerAliveStatus,
-  handleWeaponPickupCollection
+  handleWeaponPickupCollection,
+  awardPoints
 } from '../game/GameState.js';
 
 // Connected clients state
@@ -112,8 +113,15 @@ function setupEventListeners(socket) {
     handleWeaponPickupCollectionEvent(socket, data);
   });
 
-  // Placeholder for future events:
-  // - missileHit
+  // Step 7.2: Handle missile firing
+  socket.on('missileFire', (data) => {
+    handleMissileFireEvent(socket, data);
+  });
+
+  // Step 7.4: Handle missile hit reports
+  socket.on('missileHit', (data) => {
+    handleMissileHitEvent(socket, data);
+  });
 }
 
 // Handle player disconnection
@@ -255,10 +263,130 @@ function handleWeaponPickupCollectionEvent(socket, data) {
   }
 }
 
+// Step 7.2: Handle missile fire events
+function handleMissileFireEvent(socket, data) {
+  const playerId = socket.id;
+  const { missileId, shooterId, position, direction } = data || {};
+  
+  // Validate incoming data
+  if (!missileId || !shooterId || !position || !direction) {
+    console.log(`Invalid missile fire data from player ${playerId}`);
+    return;
+  }
+  
+  // Validate that the shooter is the player sending the event
+  if (shooterId !== playerId) {
+    console.log(`Player ${playerId} attempted to fire missile for another player ${shooterId}`);
+    return;
+  }
+  
+  console.log(`🚀 Player ${playerId} fired missile ${missileId}`);
+  
+  // Update player weapon state (remove weapon when fired)
+  updatePlayerWeapon(playerId, null);
+  
+  // Broadcast missile to all clients for visual synchronization
+  const missileData = {
+    missileId,
+    shooterId,
+    position,
+    direction,
+    timestamp: Date.now()
+  };
+  
+  // broadcastToAll('missileSpawned', missileData);
+  broadcastToAllExceptSender('missileSpawned', socket, missileData);
+  
+  // Broadcast updated game state (player no longer has weapon)
+  broadcastGameState();
+}
+
+// Step 7.4: Handle missile hit events and process eliminations
+function handleMissileHitEvent(socket, data) {
+  const reporterId = socket.id;
+  const { missileId, shooterId, targetId, hitPosition } = data || {};
+  
+  // Validate incoming data
+  if (!missileId || !shooterId || !targetId || !hitPosition) {
+    console.log(`Invalid missile hit data from player ${reporterId}`);
+    return;
+  }
+  
+  // Validate that the reporter is the shooter (only shooter can report hits from their missiles)
+  if (shooterId !== reporterId) {
+    console.log(`Player ${reporterId} attempted to report hit for missile from ${shooterId}`);
+    return;
+  }
+  
+  console.log(`💥 Missile hit reported: ${missileId} from ${shooterId} hit ${targetId}`);
+  
+  // Process elimination (server accepts hit reports without validation - client authoritative)
+  
+  // Award points to shooter (1 point per elimination)
+  awardPoints(shooterId, 1);
+  
+  // Eliminate target player (set as not alive, remove weapon)
+  setPlayerAliveStatus(targetId, false);
+  updatePlayerWeapon(targetId, null);
+  
+  // Broadcast elimination event to all clients
+  const eliminationData = {
+    missileId,
+    shooterId,
+    targetId,
+    hitPosition,
+    timestamp: Date.now()
+  };
+  
+  broadcastToAll('playerEliminated', eliminationData);
+  broadcastToAllExceptSender('playerEliminated', socket, eliminationData);
+  
+  // Schedule respawn after 5 seconds
+  setTimeout(() => {
+    respawnPlayer(targetId);
+  }, 5000);
+  
+  // Broadcast updated game state and leaderboard
+  broadcastGameState();
+  broadcastLeaderboard();
+  
+  console.log(`🎯 Player ${targetId} eliminated by ${shooterId}. Respawning in 5 seconds.`);
+}
+
+// Step 7.4: Respawn eliminated player
+function respawnPlayer(playerId) {
+  // Check if player is still connected
+  if (!connectedClients.has(playerId)) {
+    console.log(`Cannot respawn player ${playerId} - not connected`);
+    return;
+  }
+  
+  // Respawn player (set alive, reset weapon)
+  setPlayerAliveStatus(playerId, true);
+  updatePlayerWeapon(playerId, null);
+  
+  // Broadcast respawn event
+  const respawnData = {
+    playerId,
+    timestamp: Date.now()
+  };
+  
+  broadcastToAll('playerRespawned', respawnData);
+  broadcastGameState();
+  
+  console.log(`✨ Player ${playerId} respawned`);
+}
+
 // Broadcast functions
 export function broadcastToAll(event, data) {
   if (io) {
     io.emit(event, data);
+  }
+}
+
+export function broadcastToAllExceptSender(event, socket, data) {
+  if (socket) {
+    socket.broadcast.emit(event, data);
   }
 }
 
