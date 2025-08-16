@@ -89,12 +89,14 @@
 - Include initial supply minting to contract deployer
 
 **Test**: Contract compiles successfully using Solidity compiler. Contract has correct name, symbol, and decimals.
+
 ### Step 1.8: Set Up Local Blockchain Development
 
 **Objective**: Prepare local environment for contract testing.
 
 **Actions**:
-- Install Hardhat in project root: `npm install --save-dev hardhat`
+- Create a folder called contracts `mkdir contracts` 
+- Install Hardhat in project /contracts: `npm install --save-dev hardhat`
 - Initialize Hardhat project: `npx hardhat init`
 - Install OpenZeppelin contracts: `npm install @openzeppelin/contracts`
 - Configure `hardhat.config.js` for local network
@@ -113,6 +115,7 @@
 - Verify contract deployment and token balance
 
 **Test**: Contract deploys successfully to local network. Deployer address has initial token balance. Contract address and ABI are accessible.
+
 ### Step 1.10: Create Token Integration Module
 
 **Objective**: Set up client-side token contract interaction.
@@ -125,6 +128,7 @@
 - Add error handling for contract interactions
 
 **Test**: TokenManager successfully connects to deployed contract. `getBalance()` returns correct token balance for connected wallet.
+
 ## Phase 2: Continuous Gameplay & Kill-to-Earn
 ### ### Step 2.1: Implement Server Game Timer
 
