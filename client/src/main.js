@@ -1,7 +1,7 @@
 // Surr Game - Main Entry Point
 // This file initializes the game and starts the main game loop
 
-import { GameEngine } from './game/GameEngine.js';
+import { initGameEngine, setupVisibilityHandling } from './game/GameEngine.js';
 
 console.log('Surr Game - Client Starting...');
 
@@ -11,13 +11,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   try {
     // Initialize Game Engine
-    const gameEngine = new GameEngine();
-    const success = await gameEngine.init();
+    const success = await initGameEngine();
     
     if (success) {
       console.log('Game engine initialized successfully');
       // Setup visibility change handling for performance
-      gameEngine.setupVisibilityHandling();
+      setupVisibilityHandling();
     } else {
       console.error('Failed to initialize game engine');
     }
