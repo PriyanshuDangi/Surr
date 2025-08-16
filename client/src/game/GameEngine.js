@@ -2,11 +2,12 @@
 // Function-based game controller that manages the game loop and coordination
 
 import { initScene, updateScene, renderScene, disposeScene, getCamera } from './Scene.js';
-import { initWebSocket, isSocketConnected, broadcastPlayerPosition, setGameStateCallback, addConnectionCallback, addDisconnectionCallback } from '../network/SocketManager.js';
+import { initWebSocket, isSocketConnected, broadcastPlayerPosition, setGameStateCallback, addConnectionCallback, addDisconnectionCallback, sendWeaponPickupCollection } from '../network/SocketManager.js';
 import { playerManager } from './Player.js';
 import { initControls, getInputState, isMoving, disposeControls } from './Controls.js';
 import { initWelcomeScreen, updateConnectionStatus, hideWelcomeScreen, isWelcomeScreenShown, getPlayerName, getLocalPlayerId, handleDisconnection } from '../ui/WelcomeScreen.js';
 import { initNotifications, showWelcomeNotification, showPlayerJoinedNotification, showPlayerLeftNotification, showConnectionNotification } from '../ui/Notifications.js';
+import { initWeaponPickups, updateWeaponPickups, animateWeaponPickups, disposeWeaponPickups, checkWeaponPickupCollisions, attemptLocalPickupCollection } from './WeaponPickups.js';
 import Stats from 'stats.js';
 import * as THREE from 'three';
 
@@ -53,6 +54,9 @@ export async function initGameEngine() {
     
     // Step 5.4: Initialize notification system
     initNotifications();
+    
+    // Step 6.2: Initialize weapon pickup visualization system
+    initWeaponPickups();
     
     // Initialize websocket
     initWebSocket();
@@ -113,6 +117,9 @@ function gameLoop(currentTime = performance.now()) {
   // Step 5.3: Update interpolation for all remote players
   playerManager.updateInterpolation(deltaTime);
   
+  // Step 6.2: Animate weapon pickups
+  animateWeaponPickups(deltaTime);
+  
   updateScene(deltaTime);
   renderScene();
 
@@ -134,6 +141,9 @@ function processInput(deltaTime) {
   if (localPlayer) {
     localPlayer.updateMovement(input, deltaTime);
     
+    // Step 6.3: Check for weapon pickup collisions (local player only)
+    checkWeaponPickupCollision(localPlayer);
+    
     // Update camera to follow local player
     updateCameraFollow(localPlayer, deltaTime);
     
@@ -146,6 +156,49 @@ function processInput(deltaTime) {
   }
 }
 processInput.lastLogTime = 0;
+
+// Step 6.3: Weapon pickup collection state to prevent spam
+let lastCollectedPickupId = null;
+let lastCollectionTime = 0;
+const COLLECTION_COOLDOWN = 500; // 500ms cooldown between collections
+
+// Step 6.3: Check for weapon pickup collision (local player only)
+function checkWeaponPickupCollision(localPlayer) {
+  // Only check collisions if connected to server
+  if (!isSocketConnected()) {
+    return;
+  }
+  
+  // Check for collision with available weapon pickups
+  const collisionData = checkWeaponPickupCollisions(localPlayer);
+  
+  if (collisionData) {
+    const { pickupId } = collisionData;
+    const currentTime = Date.now();
+    
+    // Prevent spam collection - only allow one collection per pickup with cooldown
+    if (pickupId === lastCollectedPickupId && currentTime - lastCollectionTime < COLLECTION_COOLDOWN) {
+      return;
+    }
+    
+    // Attempt local collection for immediate responsive feedback
+    const localSuccess = attemptLocalPickupCollection(collisionData);
+    
+    if (localSuccess) {
+      // Update collection tracking
+      lastCollectedPickupId = pickupId;
+      lastCollectionTime = currentTime;
+      
+      // Send collection request to server for validation
+      const serverSuccess = sendWeaponPickupCollection(pickupId);
+      
+      if (!serverSuccess) {
+        console.log(`Failed to send pickup collection request to server for pickup ${pickupId}`);
+        // Pickup will be restored by game state sync if server didn't receive the request
+      }
+    }
+  }
+}
 
 // Update camera to follow local player (Step 4.3)
 function updateCameraFollow(player, deltaTime) {
@@ -206,6 +259,9 @@ export function disposeGameEngine() {
   // Dispose controls (Step 4.2)
   disposeControls();
   
+  // Dispose weapon pickups (Step 6.2)
+  disposeWeaponPickups();
+  
   // Dispose scene and stats
   disposeScene();
 
@@ -219,6 +275,11 @@ function handleGameStateUpdate(gameState) {
   // Step 5.4: Sync players with local player ID for proper identification
   const localPlayerId = getLocalPlayerId();
   playerManager.syncWithGameState(gameState, localPlayerId);
+  
+  // Step 6.2: Update weapon pickups from server data
+  if (gameState.weaponBoxes) {
+    updateWeaponPickups(gameState.weaponBoxes);
+  }
 }
 
 // Step 5.4: Create local player when joining game
