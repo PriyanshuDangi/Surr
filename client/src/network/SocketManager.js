@@ -11,6 +11,13 @@ let lastSentData = null;
 let lastTimeSent = 0;
 const THROTTLE_INTERVAL = 50; // 50ms minimum interval between sends
 
+// Step 5.2: Game state receiving tracking
+let gameStateCallback = null;
+let gameStateStats = {
+  receivedCount: 0,
+  lastLogTime: 0
+};
+
 export function initWebSocket() {
   const serverUrl = 'http://localhost:5173';
   
@@ -40,6 +47,11 @@ export function initWebSocket() {
       console.log('Retrying connection...');
       socket.connect();
     }, 3000);
+  });
+
+  // Step 5.2: Listen for game state updates from server
+  socket.on('gameState', (gameState) => {
+    handleGameState(gameState);
   });
 }
 
@@ -74,7 +86,6 @@ export function broadcastPlayerPosition(playerData) {
 
   // Send the position update
   socket.emit('playerPosition', playerData);
-  console.log('broadcastPlayerPosition', playerData);
   
   // Update tracking state
   lastSentData = { ...playerData };
@@ -120,4 +131,33 @@ export function resetBroadcastState() {
   lastSentData = null;
   lastTimeSent = 0;
   console.log('Position broadcast state reset');
+}
+
+// Step 5.2: Game state receiving functions
+export function setGameStateCallback(callback) {
+  gameStateCallback = callback;
+}
+
+function handleGameState(gameState) {
+  console.log('handleGameState', gameState);
+  gameStateStats.receivedCount++;
+  const now = performance.now();
+  
+  // Call the registered callback if available
+  if (gameStateCallback) {
+    gameStateCallback(gameState);
+  }
+  
+  // Log receiving statistics periodically
+  if (now - gameStateStats.lastLogTime > 5000) { // Log every 5 seconds
+    const playersCount = gameState.players ? gameState.players.length : 0;
+    console.log(`📨 Game state received: ${gameStateStats.receivedCount} updates in last 5s | Players: ${playersCount}`);
+    gameStateStats.lastLogTime = now;
+    gameStateStats.receivedCount = 0;
+  }
+}
+
+// Get game state receiving statistics
+export function getGameStateStats() {
+  return { ...gameStateStats };
 }

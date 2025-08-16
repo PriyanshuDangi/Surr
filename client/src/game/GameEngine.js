@@ -2,7 +2,7 @@
 // Function-based game controller that manages the game loop and coordination
 
 import { initScene, updateScene, renderScene, disposeScene, getCamera } from './Scene.js';
-import { initWebSocket, isSocketConnected, broadcastPlayerPosition } from '../network/SocketManager.js';
+import { initWebSocket, isSocketConnected, broadcastPlayerPosition, setGameStateCallback } from '../network/SocketManager.js';
 import { playerManager } from './Player.js';
 import { initControls, getInputState, isMoving, disposeControls } from './Controls.js';
 import Stats from 'stats.js';
@@ -48,6 +48,9 @@ export async function initGameEngine() {
     
     // Initialize websocket
     initWebSocket();
+    
+    // Step 5.2: Set up game state handler for multiplayer sync
+    setGameStateCallback(handleGameStateUpdate);
     
     // Create test local player to verify Player class functionality
     createTestPlayer();
@@ -180,6 +183,12 @@ export function disposeGameEngine() {
   }
 }
 
+// Step 5.2: Handle game state updates from server
+function handleGameStateUpdate(gameState) {
+  // Sync all players with server data
+  playerManager.syncWithGameState(gameState);
+}
+
 // Create test player for Step 4.1 verification
 function createTestPlayer() {
   try {
@@ -191,19 +200,14 @@ function createTestPlayer() {
       true // isLocal = true
     );
     
-    // Create a remote test player for comparison
-    const remotePlayer = playerManager.createPlayer(
-      'test-remote-player',
-      'RemotePlayer',
-      { x: 5, y: 1, z: 5 },
-      false // isLocal = false
-    );
+    // Note: Remote players will be created automatically when server sends game state
+    // No need to create test remote player manually
     
     console.log('Test players created successfully');
     console.log('Local player (green cube):', testPlayer.name);
-    console.log('Remote player (orange cube):', remotePlayer.name);
+    console.log('Remote players will be created when server sends game state');
     
-    return { testPlayer, remotePlayer };
+    return { testPlayer };
   } catch (error) {
     console.error('Failed to create test players:', error);
     return null;

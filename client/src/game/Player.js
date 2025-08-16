@@ -313,6 +313,58 @@ export class PlayerManager {
       player.updateScore(score);
     }
   }
+
+  // Step 5.2: Sync players with server game state
+  syncWithGameState(gameState) {
+    if (!gameState || !gameState.players) {
+      return;
+    }
+
+    const serverPlayerIds = new Set();
+
+    // Update or create players from server data
+    gameState.players.forEach(serverPlayer => {
+      serverPlayerIds.add(serverPlayer.id);
+      
+      // Skip local player (managed by client input)
+      if (this.localPlayer && serverPlayer.id === this.localPlayer.id) {
+        return;
+      }
+
+      const existingPlayer = this.players.get(serverPlayer.id);
+      
+      if (existingPlayer) {
+        // Update existing remote player
+        existingPlayer.updatePosition(serverPlayer.position, serverPlayer.rotation);
+        existingPlayer.updateScore(serverPlayer.score);
+        existingPlayer.updateWeapon(serverPlayer.weapon);
+        existingPlayer.updateAliveStatus(serverPlayer.isAlive);
+      } else {
+        // Create new remote player
+        this.createPlayer(
+          serverPlayer.id,
+          serverPlayer.name,
+          serverPlayer.position,
+          false // isLocal = false for remote players
+        );
+        console.log(`✨ Remote player joined: ${serverPlayer.name}`);
+      }
+    });
+
+    // Remove players that are no longer on server (disconnected)
+    const playersToRemove = [];
+    this.players.forEach((player, id) => {
+      if (!player.isLocal && !serverPlayerIds.has(id)) {
+        playersToRemove.push(id);
+      }
+    });
+
+    playersToRemove.forEach(id => {
+      const player = this.players.get(id);
+      console.log(`👋 Remote player left: ${player ? player.name : id}`);
+      this.removePlayer(id);
+    });
+  }
 }
 
 // Export singleton instance for global use

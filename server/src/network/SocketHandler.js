@@ -17,10 +17,55 @@ import {
 let connectedClients = new Map();
 let io = null;
 
+// Step 5.2: Server tick system for broadcasting game state
+let gameTickInterval = null;
+const TICK_RATE = 20; // 20Hz = 50ms intervals
+const TICK_INTERVAL = 1000 / TICK_RATE;
+let lastGameStateBroadcast = 0;
+let pendingGameStateBroadcast = true;
+
 // Initialize socket handler
 export function initSocketHandler(ioInstance) {
   io = ioInstance;
   console.log('SocketHandler initialized');
+  
+  // Step 5.2: Start server tick for game state broadcasting
+  startServerTick();
+}
+
+// Step 5.2: Server tick system functions
+function startServerTick() {
+  if (gameTickInterval) {
+    clearInterval(gameTickInterval);
+  }
+
+  
+  
+  gameTickInterval = setInterval(() => {
+    // Only broadcast if there are connected players
+    if (connectedClients.size > 0 && Date.now() - lastGameStateBroadcast > TICK_INTERVAL && pendingGameStateBroadcast) {
+      broadcastGameState();
+      pendingGameStateBroadcast = false;
+      lastGameStateBroadcast = Date.now();
+    }
+  }, TICK_INTERVAL);
+  
+  console.log(`🎯 Server tick started at ${TICK_RATE}Hz (${TICK_INTERVAL}ms intervals)`);
+}
+
+function stopServerTick() {
+  if (gameTickInterval) {
+    clearInterval(gameTickInterval);
+    gameTickInterval = null;
+    console.log('🛑 Server tick stopped');
+  }
+}
+
+// Cleanup function for graceful shutdown
+export function cleanup() {
+  stopServerTick();
+  connectedClients.clear();
+  console.log('SocketHandler cleanup completed');
 }
 
 // Handle new client connection
@@ -164,6 +209,8 @@ function handlePlayerPosition(socket, data) {
   
   handlePlayerPosition.updateCount++;
   const now = Date.now();
+
+  pendingGameStateBroadcast = true;
   
   if (now - handlePlayerPosition.lastLogTime > 5000) { // Log every 5 seconds
     console.log(`📍 Position updates received: ${handlePlayerPosition.updateCount} in last 5s from ${getPlayerCount()} players`);
@@ -182,6 +229,22 @@ export function broadcastToAll(event, data) {
 export function broadcastGameState() {
   const gameState = getGameStateForBroadcast();
   broadcastToAll('gameState', gameState);
+  
+  // Step 5.2: Log broadcast statistics periodically
+  if (!broadcastGameState.lastLogTime) {
+    broadcastGameState.lastLogTime = 0;
+    broadcastGameState.broadcastCount = 0;
+  }
+  
+  broadcastGameState.broadcastCount++;
+  const now = Date.now();
+  
+  if (now - broadcastGameState.lastLogTime > 10000) { // Log every 10 seconds
+    const playersData = gameState.players || [];
+    console.log(`📢 Game state broadcasts: ${broadcastGameState.broadcastCount} in last 10s | Players: ${playersData.length} | Clients: ${connectedClients.size}`);
+    broadcastGameState.lastLogTime = now;
+    broadcastGameState.broadcastCount = 0;
+  }
 }
 
 export function broadcastLeaderboard() {
