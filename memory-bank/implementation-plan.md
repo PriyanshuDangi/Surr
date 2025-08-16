@@ -163,7 +163,7 @@
 
 **Actions:**
 - Create `Player.js` class for client-side player management
-- Add properties for position, rotation, velocity
+- Add properties for position, rotation, speed
 - Add method to create basic cube geometry as placeholder kart
 - Add method to update player position in scene
 - Create separate instances for local player vs other players
@@ -188,7 +188,7 @@
 **Actions:**
 - Integrate Controls.js into GameEngine update loop
 - Add movement calculations to Player.js (forward/backward, turning)
-- Implement basic velocity and momentum for realistic movement
+- Implement basic speed and momentum for realistic movement
 - Add camera follow logic to track player movement
 - Ensure smooth interpolated movement
 
@@ -214,7 +214,7 @@
 **Actions:**
 - Add position update event to client SocketManager
 - Send player position data to server only when position, rotation, or state changes
-- Include position, rotation, and player state in updates (no velocity needed)
+- Include position, rotation, and player state in updates (no speed needed)
 - Add throttling to prevent excessive network traffic
 - Add error handling for network issues
 
@@ -302,7 +302,7 @@
 
 **Actions:**
 - Send physics-based positions instead of direct positions
-- Add velocity and angular velocity to network updates
+- Add speed and angular velocity to network updates
 - Implement client-side prediction for local player
 - Add server reconciliation for position corrections
 - Handle physics state synchronization edge cases
