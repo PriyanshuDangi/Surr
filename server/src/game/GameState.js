@@ -54,8 +54,11 @@ export function initGameState() {
 export function addPlayer(playerId, playerName, walletAddress = null) {
   if (getActivePlayerCount() >= maxPlayers) {
     console.log(`Cannot add player ${playerName}: Game is full`);
-    return false;
+    return { success: false, reason: 'Game is full' };
   }
+
+  let isNewPlayer = false;
+  let roundEvent = null;
 
   // Check if player already exists (reactivate if inactive)
   if (players.has(playerId)) {
@@ -70,27 +73,45 @@ export function addPlayer(playerId, playerName, walletAddress = null) {
     } else {
       console.log(`Player reconnected mid-round: ${playerName} (${playerId}) - preserved score: ${previousScore}`);
     }
+  } else {
+    // Create new player - always start with score 0, regardless of round state
+    const player = createPlayer(playerId, playerName, walletAddress);
+    player.score = 0; // Explicitly ensure new players start with 0 score
+    players.set(playerId, player);
+    isNewPlayer = true;
     
-    // Start round if this is the first active player
-    if (getActivePlayerCount() === 1 && !currentRound.isActive) {
-      const roundEvent = startNewRound();
-      return { success: true, roundEvent };
+    if (currentRound.isActive) {
+      console.log(`New player added mid-round: ${playerName} (${playerId}) - starting with 0 score, can earn rewards`);
+    } else {
+      console.log(`Player added: ${playerName} (${playerId})${walletAddress ? ` with wallet ${walletAddress}` : ''}`);
     }
-    return { success: true };
   }
-
-  // Create new player
-  const player = createPlayer(playerId, playerName, walletAddress);
-  players.set(playerId, player);
-  console.log(`Player added: ${playerName} (${playerId})${walletAddress ? ` with wallet ${walletAddress}` : ''}`);
   
-  // Start round if this is the first player
+  // Start round if this is the first active player
   if (getActivePlayerCount() === 1 && !currentRound.isActive) {
-    const roundEvent = startNewRound();
-    return { success: true, roundEvent };
+    roundEvent = startNewRound();
   }
   
-  return { success: true };
+  // Get complete round state for new player synchronization
+  const roundState = {
+    round: {
+      number: currentRound.number,
+      isActive: currentRound.isActive,
+      remainingTime: getRemainingTime(),
+      startTime: currentRound.startTime
+    },
+    playerJoinedMidRound: currentRound.isActive && isNewPlayer,
+    canEarnRewards: true, // Players can always earn rewards, even joining mid-round
+    gameState: getGameStateForBroadcast()
+  };
+  
+  return { 
+    success: true, 
+    roundEvent,
+    roundState,
+    isNewPlayer,
+    joinedMidRound: currentRound.isActive && isNewPlayer
+  };
 }
 
 export function removePlayer(playerId) {
@@ -440,6 +461,60 @@ export function getPlayerStateSummary() {
       isActive: currentRound.isActive,
       remainingTime: getRemainingTime()
     }
+  };
+}
+
+// Step 2.10: Get complete round synchronization data for joining players
+export function getRoundSynchronizationData() {
+  const roundState = {
+    round: {
+      number: currentRound.number,
+      isActive: currentRound.isActive,
+      remainingTime: getRemainingTime(),
+      startTime: currentRound.startTime,
+      duration: ROUND_DURATION
+    },
+    gameState: getGameStateForBroadcast(),
+    playerCount: getActivePlayerCount(),
+    roundSummary: currentRound.isActive ? null : getRoundPerformanceSummary(),
+    status: currentRound.isActive ? 'round-in-progress' : 'waiting-for-players'
+  };
+  
+  return roundState;
+}
+
+// Step 2.10: Handle edge case when players join during round transition
+export function isRoundTransitioning() {
+  // Check if we're in the brief moment between round end and start
+  const remainingTime = getRemainingTime();
+  return currentRound.isActive && remainingTime <= 100; // Last 100ms of round
+}
+
+// Step 2.10: Get appropriate UI state message for joining players
+export function getJoinMessage(joinedMidRound, roundState) {
+  if (!roundState.round.isActive) {
+    return {
+      type: 'waiting',
+      message: 'Waiting for round to start...',
+      canPlay: true
+    };
+  }
+  
+  if (joinedMidRound) {
+    const remainingMinutes = Math.ceil(roundState.round.remainingTime / 60000);
+    return {
+      type: 'mid-round-join',
+      message: `Joined Round ${roundState.round.number} in progress! ${remainingMinutes}min remaining. You can still earn rewards!`,
+      canPlay: true,
+      earnRewards: true
+    };
+  }
+  
+  return {
+    type: 'round-active',
+    message: `Round ${roundState.round.number} in progress`,
+    canPlay: true,
+    earnRewards: true
   };
 }
 
