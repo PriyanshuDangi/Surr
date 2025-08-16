@@ -107,6 +107,11 @@ export function initWebSocket() {
   socket.on('roundEvent', (data) => {
     handleRoundEvent(data);
   });
+  
+  // Step 2.9: Listen for reward events
+  socket.on('roundRewards', (data) => {
+    handleRoundRewards(data);
+  });
 }
 
 export function getSocket() {
@@ -346,6 +351,13 @@ export function setRoundEventCallback(callback) {
   roundEventCallback = callback;
 }
 
+// Step 2.9: Reward notification callback for client-side reward notifications
+let rewardNotificationCallback = null;
+
+export function setRewardNotificationCallback(callback) {
+  rewardNotificationCallback = callback;
+}
+
 // Step 7.4: Handle player respawn events from server
 function handlePlayerRespawned(data) {
   const { playerId, spawnPosition } = data;
@@ -380,6 +392,16 @@ function handleRoundEvent(data) {
   // Call round event callback for UI updates
   if (roundEventCallback) {
     roundEventCallback(data);
+  }
+}
+
+// Step 2.9: Handle reward notifications from server
+function handleRoundRewards(data) {
+  console.log(`💰 Round rewards received:`, data);
+  
+  // Call reward notification callback for UI updates
+  if (rewardNotificationCallback) {
+    rewardNotificationCallback(data);
   }
 }
 

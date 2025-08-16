@@ -101,7 +101,10 @@ export function removePlayer(playerId) {
     
     // End round if no active players remain
     if (getActivePlayerCount() === 0 && currentRound.isActive) {
-      endCurrentRound().catch(error => {
+      endCurrentRound().then(events => {
+        // Events will be handled by the server tick system
+        console.log(`Round ended with ${events.length} events`);
+      }).catch(error => {
         console.error('Error ending round:', error);
       });
     }
@@ -330,8 +333,11 @@ export async function endCurrentRound() {
   // Clear all player scores after reward distribution
   clearAllPlayerScores();
   
-  // Return round end event data for broadcasting
-  return {
+  // Create events array to return multiple events
+  const events = [];
+  
+  // Add round end event
+  events.push({
     type: 'roundEnded',
     roundNumber: currentRound.number,
     summary: roundSummary,
@@ -339,7 +345,31 @@ export async function endCurrentRound() {
     message: eligiblePlayers.length > 0 
       ? `Round ${currentRound.number} ended! ${eligiblePlayers.length} players earned rewards.`
       : `Round ${currentRound.number} ended. No rewards earned this round.`
-  };
+  });
+  
+  // Add reward events for successful distributions
+  if (rewardResult && rewardResult.distribution.successful.length > 0) {
+    events.push({
+      type: 'roundRewards',
+      roundNumber: currentRound.number,
+      rewards: rewardResult.distribution.successful.map(reward => ({
+        playerId: reward.playerId,
+        playerName: reward.playerName,
+        walletAddress: reward.walletAddress,
+        roundKills: reward.kills,
+        tokensEarned: reward.tokensToMint,
+        transactionHash: reward.transactionHash,
+        blockNumber: reward.blockNumber
+      })),
+      summary: {
+        totalPlayers: rewardResult.summary.successfulDistributions,
+        totalTokens: rewardResult.summary.totalTokensDistributed,
+        totalKills: rewardResult.summary.totalKills
+      }
+    });
+  }
+  
+  return events;
 }
 
 export function getRemainingTime() {
@@ -357,8 +387,10 @@ export async function checkRoundTimer() {
   
   if (currentRound.isActive && getRemainingTime() <= 0) {
     try {
-      const endEvent = await endCurrentRound();
-      if (endEvent) events.push(endEvent);
+      const endEvents = await endCurrentRound();
+      if (endEvents && Array.isArray(endEvents)) {
+        events.push(...endEvents);
+      }
       
       // Start new round if players are still active
       if (getActivePlayerCount() > 0) {
