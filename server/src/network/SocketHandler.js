@@ -15,7 +15,9 @@ import {
   awardPoints,
   checkRoundTimer,
   getPlayerStateSummary,
-  getRoundPerformanceSummary
+  getRoundPerformanceSummary,
+  startNewRound,
+  endCurrentRound
 } from '../game/GameState.js';
 import { validateWalletAddress, formatWalletAddress } from '../game/Player.js';
 
@@ -48,8 +50,14 @@ function startServerTick() {
   
   
   gameTickInterval = setInterval(() => {
-    // Check round timer every tick
-    checkRoundTimer();
+    // Check round timer every tick and handle events
+    const roundEvents = checkRoundTimer();
+    if (roundEvents && roundEvents.length > 0) {
+      roundEvents.forEach(event => {
+        console.log(`🎯 Broadcasting round event: ${event.type} - ${event.message}`);
+        broadcastToAll('roundEvent', event);
+      });
+    }
     
     // Only broadcast if there are connected players
     if (connectedClients.size > 0 && Date.now() - lastGameStateBroadcast > TICK_INTERVAL && pendingGameStateBroadcast) {
@@ -211,9 +219,14 @@ function handleJoinGame(socket, data) {
   }
   
   // Add player to game state
-  const success = addPlayer(playerId, finalPlayerName, walletAddress);
+  const result = addPlayer(playerId, finalPlayerName, walletAddress);
   
-  if (success) {
+  if (result && result.success) {
+    // Handle round start event if this player triggered a new round
+    if (result.roundEvent) {
+      console.log(`🎯 Broadcasting round event from player join: ${result.roundEvent.type} - ${result.roundEvent.message}`);
+      broadcastToAll('roundEvent', result.roundEvent);
+    }
     // Update client info
     const clientInfo = connectedClients.get(socket.id);
     if (clientInfo) {
