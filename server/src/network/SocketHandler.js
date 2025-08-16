@@ -17,7 +17,10 @@ import {
   getPlayerStateSummary,
   getRoundPerformanceSummary,
   startNewRound,
-  endCurrentRound
+  endCurrentRound,
+  getRoundSynchronizationData,
+  isRoundTransitioning,
+  getJoinMessage
 } from '../game/GameState.js';
 import { validateWalletAddress, formatWalletAddress } from '../game/Player.js';
 
@@ -218,6 +221,17 @@ function handleJoinGame(socket, data) {
     }
   }
   
+  // Check for round transition edge case
+  if (isRoundTransitioning()) {
+    socket.emit('joinGameResponse', {
+      success: false,
+      message: 'Round is transitioning. Please try again in a moment.',
+      playerId: null,
+      retryIn: 2000 // Suggest retry in 2 seconds
+    });
+    return;
+  }
+  
   // Add player to game state
   const result = addPlayer(playerId, finalPlayerName, walletAddress);
   
@@ -227,6 +241,7 @@ function handleJoinGame(socket, data) {
       console.log(`🎯 Broadcasting round event from player join: ${result.roundEvent.type} - ${result.roundEvent.message}`);
       broadcastToAll('roundEvent', result.roundEvent);
     }
+    
     // Update client info
     const clientInfo = connectedClients.get(socket.id);
     if (clientInfo) {
@@ -234,22 +249,48 @@ function handleJoinGame(socket, data) {
       clientInfo.walletAddress = walletAddress;
     }
     
-    // Acknowledge successful join
+    // Step 2.10: Get complete round synchronization data
+    const roundSyncData = getRoundSynchronizationData();
+    const joinMessage = getJoinMessage(result.joinedMidRound, roundSyncData);
+    
+    // Step 2.10: Enhanced join response with complete round state
     socket.emit('joinGameResponse', {
       success: true,
-      message: `Welcome ${finalPlayerName}!`,
+      message: joinMessage.message,
       playerId: playerId, // Return the actual player ID (wallet address or socket.id)
       playerCount: getPlayerCount(),
-      maxPlayers: 6
+      maxPlayers: 6,
+      // Step 2.10: Complete round synchronization
+      roundState: {
+        round: roundSyncData.round,
+        status: roundSyncData.status,
+        joinedMidRound: result.joinedMidRound,
+        canEarnRewards: joinMessage.earnRewards || false,
+        messageType: joinMessage.type
+      },
+      gameState: roundSyncData.gameState
     });
     
-    // Broadcast updates
+    // Step 2.10: Send immediate round sync to new player
+    if (result.joinedMidRound) {
+      socket.emit('roundSync', {
+        type: 'mid-round-join',
+        roundNumber: roundSyncData.round.number,
+        remainingTime: roundSyncData.round.remainingTime,
+        canEarnRewards: true,
+        message: `Joined Round ${roundSyncData.round.number} in progress! You can still earn rewards for kills.`
+      });
+    }
+    
+    // Broadcast updates to other players
     broadcastGameState();
     broadcastLeaderboard();
+    
+    console.log(`✅ Player joined successfully: ${finalPlayerName} (${playerId}) - Mid-round: ${result.joinedMidRound ? 'Yes' : 'No'}`);
   } else {
     socket.emit('joinGameResponse', {
       success: false,
-      message: 'Failed to join game. Please try again.',
+      message: result?.reason || 'Failed to join game. Please try again.',
       playerId: null
     });
   }
