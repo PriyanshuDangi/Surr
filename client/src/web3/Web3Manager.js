@@ -19,16 +19,37 @@ export default class Web3Manager {
      */
     async connectWallet() {
         try {
-            // Detect MetaMask provider
-            const provider = await detectEthereumProvider();
+            // Try to detect MetaMask specifically
+            let provider = await detectEthereumProvider();
             
             if (!provider) {
-                throw new Error('No Ethereum provider detected. Please install MetaMask.');
+                throw new Error('MetaMask is required to play this game');
             }
 
-            // Check if MetaMask is the detected provider
-            if (provider !== window.ethereum) {
-                throw new Error('Multiple wallets detected. Please use MetaMask.');
+            // If multiple wallets are detected, try to find MetaMask specifically
+            if (provider !== window.ethereum && window.ethereum) {
+                // Check if window.ethereum is MetaMask
+                if (window.ethereum.isMetaMask) {
+                    provider = window.ethereum;
+                    console.log('Multiple wallets detected, using MetaMask');
+                } 
+                // Check if there are multiple providers and find MetaMask
+                else if (window.ethereum.providers && Array.isArray(window.ethereum.providers)) {
+                    const metaMaskProvider = window.ethereum.providers.find(p => p.isMetaMask);
+                    if (metaMaskProvider) {
+                        provider = metaMaskProvider;
+                        console.log('Multiple wallets detected, using MetaMask from providers array');
+                    } else {
+                        throw new Error('MetaMask is required to play this game');
+                    }
+                } else {
+                    throw new Error('MetaMask is required to play this game');
+                }
+            }
+            
+            // Verify the final provider is MetaMask
+            if (!provider.isMetaMask) {
+                throw new Error('MetaMask is required to play this game');
             }
 
             // Initialize Web3 instance
@@ -85,9 +106,26 @@ export default class Web3Manager {
      */
     async checkConnection() {
         try {
-            const provider = await detectEthereumProvider();
+            let provider = await detectEthereumProvider();
             
             if (!provider) {
+                return null;
+            }
+
+            // If multiple wallets are detected, try to find MetaMask specifically
+            if (provider !== window.ethereum && window.ethereum) {
+                if (window.ethereum.isMetaMask) {
+                    provider = window.ethereum;
+                } else if (window.ethereum.providers && Array.isArray(window.ethereum.providers)) {
+                    const metaMaskProvider = window.ethereum.providers.find(p => p.isMetaMask);
+                    if (metaMaskProvider) {
+                        provider = metaMaskProvider;
+                    }
+                }
+            }
+
+            // Only proceed if we have MetaMask
+            if (!provider.isMetaMask) {
                 return null;
             }
 
@@ -177,10 +215,12 @@ export default class Web3Manager {
             return 'User rejected the connection request';
         } else if (error.code === -32002) {
             return 'Connection request already pending';
-        } else if (error.message.includes('No Ethereum provider')) {
-            return 'MetaMask not detected. Please install MetaMask extension.';
-        } else if (error.message.includes('Multiple wallets')) {
-            return error.message;
+        } else if (error.message.includes('MetaMask is required to play this game')) {
+            return 'MetaMask is required to play this game';
+        } else if (error.message.includes('MetaMask not found among installed wallets')) {
+            return 'MetaMask is required to play this game';
+        } else if (error.message.includes('Selected provider is not MetaMask')) {
+            return 'MetaMask is required to play this game';
         } else if (error.message.includes('No accounts returned')) {
             return 'No accounts available. Please unlock MetaMask and try again.';
         }
@@ -194,5 +234,28 @@ export default class Web3Manager {
         this.web3 = null;
         this.account = null;
         this.isWalletConnected = false;
+    }
+
+    /**
+     * Helper method to guide users to install MetaMask
+     * @returns {string} Installation guidance message
+     */
+    getInstallationGuidance() {
+        return 'MetaMask is required to play this game';
+    }
+
+    /**
+     * Check if MetaMask is installed
+     * @returns {boolean} True if MetaMask is detected
+     */
+    static isMetaMaskInstalled() {
+        if (typeof window === 'undefined') return false;
+        
+        return !!(
+            window.ethereum && 
+            (window.ethereum.isMetaMask || 
+             (window.ethereum.providers && 
+              window.ethereum.providers.some(p => p.isMetaMask)))
+        );
     }
 }

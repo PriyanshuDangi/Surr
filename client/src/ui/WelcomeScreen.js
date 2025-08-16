@@ -123,10 +123,24 @@ function handleWalletError(message) {
   
   // Reset button state
   connectWalletButton.disabled = false;
-  connectWalletButton.textContent = '🦊 Connect MetaMask';
   
-  // Show error message
-  showMessage(errorMessage, message);
+  // Check if this is a MetaMask installation issue
+  if (message.includes('MetaMask is required to play this game') || 
+      !Web3Manager.isMetaMaskInstalled()) {
+    
+    // Show install guidance
+    const guidance = web3Manager.getInstallationGuidance();
+    
+    // Show simple message
+    showMessage(errorMessage, guidance);
+    
+  } else {
+    // Show error message
+    showMessage(errorMessage, message);
+  }
+  
+  // Reset button text for all cases
+  connectWalletButton.textContent = '🦊 Connect MetaMask';
 }
 
 // Format wallet address for display (first 6 + last 4 characters)
