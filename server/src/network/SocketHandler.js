@@ -14,7 +14,8 @@ import {
   handleWeaponPickupCollection,
   awardPoints,
   checkRoundTimer,
-  getPlayerStateSummary
+  getPlayerStateSummary,
+  getRoundPerformanceSummary
 } from '../game/GameState.js';
 import { validateWalletAddress, formatWalletAddress } from '../game/Player.js';
 
@@ -549,7 +550,8 @@ export function broadcastGameState() {
     console.log(`📢 Game state broadcasts: ${broadcastGameState.broadcastCount} in last 10s | Active: ${playersData.length} | Total: ${playerSummary.total} (${playerSummary.inactive} inactive) | Clients: ${connectedClients.size}`);
     if (playerSummary.round.isActive) {
       const timeLeft = Math.ceil(playerSummary.round.remainingTime / 1000);
-      console.log(`🎮 Round ${playerSummary.round.number} active - ${timeLeft}s remaining | Players with kills: ${playerSummary.withKills}`);
+      const roundPerf = getRoundPerformanceSummary();
+      console.log(`🎮 Round ${playerSummary.round.number} active - ${timeLeft}s remaining | Kills: ${roundPerf.totalKills} by ${roundPerf.playersWithKills} players (top: ${roundPerf.topScore})`);
     }
     broadcastGameState.lastLogTime = now;
     broadcastGameState.broadcastCount = 0;
