@@ -46,8 +46,8 @@ export function initControls() {
   // Prevent default behavior for game keys
   document.addEventListener('keydown', preventDefaultForGameKeys);
   
-  console.log('Controls initialized with key mappings:', Object.keys(KEY_MAPPINGS));
-  console.log('Supported controls: WASD/Arrow keys for movement, Spacebar to shoot');
+  // console.log('Controls initialized with key mappings:', Object.keys(KEY_MAPPINGS));
+  // console.log('Supported controls: WASD/Arrow keys for movement, Spacebar to shoot');
 }
 
 // Handle key press with enhanced logging
@@ -69,7 +69,7 @@ function handleKeyDown(event) {
   
   // Log state change for testing (Step 4.2 requirement)
   if (!wasPressed) {
-    console.log(`🎮 Key pressed: ${keyCode} → ${action} = true`);
+    // console.log(`🎮 Key pressed: ${keyCode} → ${action} = true`);
     logCurrentInputState();
   }
 }
@@ -90,7 +90,7 @@ function handleKeyUp(event) {
   
   // Log state change for testing (Step 4.2 requirement)
   if (wasPressed) {
-    console.log(`🎮 Key released: ${keyCode} → ${action} = false`);
+    // console.log(`🎮 Key released: ${keyCode} → ${action} = false`);
     logCurrentInputState();
   }
 }
@@ -104,13 +104,13 @@ function preventDefaultForGameKeys(event) {
 
 // Handle window losing focus
 function handleWindowBlur() {
-  console.log('🎮 Window lost focus - clearing all input state');
+  // console.log('🎮 Window lost focus - clearing all input state');
   clearAllInput();
 }
 
 // Handle window gaining focus
 function handleWindowFocus() {
-  console.log('🎮 Window gained focus - input ready');
+  // console.log('🎮 Window gained focus - input ready');
 }
 
 // Clear all input state
@@ -126,7 +126,7 @@ function clearAllInput() {
   inputState.lastInputTime = performance.now();
   
   if (hadInput) {
-    console.log('🎮 All input cleared');
+    // console.log('🎮 All input cleared');
     logCurrentInputState();
   }
 }
@@ -140,7 +140,7 @@ function logCurrentInputState() {
   if (inputState.right) activeKeys.push('right');
   if (inputState.shoot) activeKeys.push('shoot');
   
-  console.log(`🎮 Input State: [${activeKeys.join(', ') || 'none'}] | Keys: ${inputState.keys.size}`);
+  // console.log(`🎮 Input State: [${activeKeys.join(', ') || 'none'}] | Keys: ${inputState.keys.size}`);
 }
 
 // Get current input state (immutable copy)
@@ -184,7 +184,7 @@ export function getPressedKeys() {
 export function setInputState(newState) {
   Object.assign(inputState, newState);
   inputState.lastInputTime = performance.now();
-  console.log('🎮 Input state manually updated:', newState);
+  // console.log('🎮 Input state manually updated:', newState);
 }
 
 // Dispose controls and cleanup
