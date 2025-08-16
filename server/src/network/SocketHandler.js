@@ -1,153 +1,142 @@
-// Surr Game - Socket Handler
-// Manages all Socket.IO events and communication with clients
+// Surr Game - Socket Handler Functions
+// Function-based socket event management
 
-import { getGameState } from '../game/GameState.js';
+import { 
+  addPlayer, 
+  removePlayer, 
+  canAcceptPlayers, 
+  getPlayerCount, 
+  getGameStateForBroadcast, 
+  getLeaderboard 
+} from '../game/GameState.js';
 
-export class SocketHandler {
-  constructor(io) {
-    this.io = io;
-    this.connectedClients = new Map();
-    this.gameState = getGameState();
-    console.log('SocketHandler initialized');
-  }
+// Connected clients state
+let connectedClients = new Map();
+let io = null;
 
-  // Initialize socket event handlers
-  handleConnection(socket) {
-    console.log(`Client connected: ${socket.id}`);
-    
-    // Store client connection
-    this.connectedClients.set(socket.id, {
-      socket: socket,
-      connected: true,
-      playerName: null
-    });
+// Initialize socket handler
+export function initSocketHandler(ioInstance) {
+  io = ioInstance;
+  console.log('SocketHandler initialized');
+}
 
-    // Send connection confirmation
-    this.handleConnectionConfirmation(socket);
-    
-    // Set up event listeners
-    this.setupEventListeners(socket);
-  }
+// Handle new client connection
+export function handleConnection(socket) {
+  console.log(`Client connected: ${socket.id}`);
+  
+  // Store client connection
+  connectedClients.set(socket.id, {
+    socket: socket,
+    connected: true,
+    playerName: null
+  });
 
-  // Handle connection confirmation
-  handleConnectionConfirmation(socket) {
-    socket.emit('connected', { 
-      message: 'Connected to Surr Game Server', 
-      clientId: socket.id 
-    });
-  }
+  // Send connection confirmation
+  socket.emit('connected', { 
+    message: 'Connected to Surr Game Server', 
+    clientId: socket.id 
+  });
+  
+  // Set up event listeners
+  setupEventListeners(socket);
+}
 
-  // Set up all socket event listeners
-  setupEventListeners(socket) {
-    // Handle disconnection
-    socket.on('disconnect', (reason) => {
-      this.handleDisconnection(socket, reason);
-    });
-    
-    // Handle join game requests
-    socket.on('joinGame', (data) => {
-      this.handleJoinGame(socket, data);
-    });
-
-    // Placeholder for future events
-    // These will be implemented in later phases:
-    // - playerPosition
-    // - missileHit
-    // - weaponboxCollected
-  }
-
-  // Handle player disconnection
-  handleDisconnection(socket, reason) {
-    console.log(`Client disconnected: ${socket.id} - Reason: ${reason}`);
-    
-    // Remove from game state
-    this.gameState.removePlayer(socket.id);
-    
-    // Remove from connected clients
-    this.connectedClients.delete(socket.id);
-    
-    // Broadcast updated game state to remaining clients
-    this.broadcastGameState();
-  }
-
+// Set up socket event listeners
+function setupEventListeners(socket) {
+  // Handle disconnection
+  socket.on('disconnect', (reason) => {
+    handleDisconnection(socket, reason);
+  });
+  
   // Handle join game requests
-  handleJoinGame(socket, data) {
-    const playerName = data?.playerName || 'Unknown';
-    console.log(`Player attempting to join: ${playerName}`);
-    
-    // Check if game can accept more players
-    if (!this.gameState.canAcceptPlayers()) {
-      socket.emit('joinGameResponse', {
-        success: false,
-        message: 'Game is full. Maximum 6 players allowed.',
-        playerId: null
-      });
-      return;
+  socket.on('joinGame', (data) => {
+    handleJoinGame(socket, data);
+  });
+
+  // Placeholder for future events:
+  // - playerPosition
+  // - missileHit  
+  // - weaponboxCollected
+}
+
+// Handle player disconnection
+function handleDisconnection(socket, reason) {
+  console.log(`Client disconnected: ${socket.id} - Reason: ${reason}`);
+  
+  // Remove from game state
+  removePlayer(socket.id);
+  
+  // Remove from connected clients
+  connectedClients.delete(socket.id);
+  
+  // Broadcast updated game state
+  broadcastGameState();
+}
+
+// Handle join game requests
+function handleJoinGame(socket, data) {
+  const playerName = data?.playerName || 'Unknown';
+  console.log(`Player attempting to join: ${playerName}`);
+  
+  // Check if game can accept more players
+  if (!canAcceptPlayers()) {
+    socket.emit('joinGameResponse', {
+      success: false,
+      message: 'Game is full. Maximum 6 players allowed.',
+      playerId: null
+    });
+    return;
+  }
+  
+  // Add player to game state
+  const success = addPlayer(socket.id, playerName);
+  
+  if (success) {
+    // Update client info
+    const clientInfo = connectedClients.get(socket.id);
+    if (clientInfo) {
+      clientInfo.playerName = playerName;
     }
     
-    // Add player to game state
-    const success = this.gameState.addPlayer(socket.id, playerName);
+    // Acknowledge successful join
+    socket.emit('joinGameResponse', {
+      success: true,
+      message: `Welcome ${playerName}!`,
+      playerId: socket.id,
+      playerCount: getPlayerCount(),
+      maxPlayers: 6
+    });
     
-    if (success) {
-      // Update client info
-      const clientInfo = this.connectedClients.get(socket.id);
-      if (clientInfo) {
-        clientInfo.playerName = playerName;
-      }
-      
-      // Acknowledge successful join
-      socket.emit('joinGameResponse', {
-        success: true,
-        message: `Welcome ${playerName}!`,
-        playerId: socket.id,
-        playerCount: this.gameState.getPlayerCount(),
-        maxPlayers: this.gameState.maxPlayers
-      });
-      
-      // Broadcast updated game state to all clients
-      this.broadcastGameState();
-      
-      // Send initial leaderboard
-      this.broadcastLeaderboard();
-    } else {
-      socket.emit('joinGameResponse', {
-        success: false,
-        message: 'Failed to join game. Please try again.',
-        playerId: null
-      });
-    }
+    // Broadcast updates
+    broadcastGameState();
+    broadcastLeaderboard();
+  } else {
+    socket.emit('joinGameResponse', {
+      success: false,
+      message: 'Failed to join game. Please try again.',
+      playerId: null
+    });
   }
+}
 
-  // Get connected client count
-  getConnectedCount() {
-    return this.connectedClients.size;
+// Broadcast functions
+export function broadcastToAll(event, data) {
+  if (io) {
+    io.emit(event, data);
   }
+}
 
-  // Broadcast message to all connected clients
-  broadcastToAll(event, data) {
-    this.io.emit(event, data);
-  }
+export function broadcastGameState() {
+  const gameState = getGameStateForBroadcast();
+  broadcastToAll('gameState', gameState);
+}
 
-  // Broadcast message to all clients except sender
-  broadcastToOthers(socketId, event, data) {
-    this.io.to(socketId).broadcast.emit(event, data);
-  }
+export function broadcastLeaderboard() {
+  const leaderboard = getLeaderboard();
+  broadcastToAll('leaderboardUpdate', { leaderboard });
+}
 
-  // Broadcast current game state to all clients
-  broadcastGameState() {
-    const gameState = this.gameState.getGameStateForBroadcast();
-    this.broadcastToAll('gameState', gameState);
-  }
-
-  // Broadcast current leaderboard to all clients
-  broadcastLeaderboard() {
-    const leaderboard = this.gameState.getLeaderboard();
-    this.broadcastToAll('leaderboardUpdate', { leaderboard });
-  }
-
-  // Create test script for game state validation
-  createTestPlayer(playerName = 'TestPlayer') {
-    const testId = `test_${Date.now()}`;
-    return this.gameState.addPlayer(testId, playerName);
-  }
+// Get connected client count
+export function getConnectedCount() {
+  return connectedClients.size;
 }
