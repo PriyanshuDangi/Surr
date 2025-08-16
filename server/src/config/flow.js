@@ -1,7 +1,7 @@
 // Flow Testnet Configuration
 const FLOW_CONFIG = {
   // Flow Network Settings
-  TESTNET_RPC: '	https://testnet.evm.nodes.onflow.org',
+  TESTNET_RPC: 'https://testnet.evm.nodes.onflow.org',
   ACCESS_NODE: 'https://evm-testnet.flowscan.io',
   
   // Contract Configuration
