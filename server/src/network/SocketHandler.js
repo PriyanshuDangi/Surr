@@ -14,6 +14,7 @@ import {
   handleWeaponPickupCollection,
   awardPoints
 } from '../game/GameState.js';
+import { validateWalletAddress, formatWalletAddress } from '../game/Player.js';
 
 // Connected clients state
 let connectedClients = new Map();
@@ -78,7 +79,8 @@ export function handleConnection(socket) {
   connectedClients.set(socket.id, {
     socket: socket,
     connected: true,
-    playerName: null
+    playerName: null,
+    walletAddress: null
   });
 
   // Send connection confirmation
@@ -128,8 +130,12 @@ function setupEventListeners(socket) {
 function handleDisconnection(socket, reason) {
   console.log(`Client disconnected: ${socket.id} - Reason: ${reason}`);
   
-  // Remove from game state
-  removePlayer(socket.id);
+  // Get the actual player ID (wallet address if Web3 player, socket.id otherwise)
+  const clientInfo = connectedClients.get(socket.id);
+  const playerId = clientInfo?.walletAddress || socket.id;
+  
+  // Remove from game state using the correct player ID
+  removePlayer(playerId);
   
   // Remove from connected clients
   connectedClients.delete(socket.id);
@@ -141,7 +147,9 @@ function handleDisconnection(socket, reason) {
 // Handle join game requests
 function handleJoinGame(socket, data) {
   const playerName = data?.playerName || 'Unknown';
-  console.log(`Player attempting to join: ${playerName}`);
+  const walletAddress = data?.walletAddress || null;
+  
+  console.log(`Player attempting to join: ${playerName}${walletAddress ? ` (Wallet: ${walletAddress})` : ''}`);
   
   // Check if game can accept more players
   if (!canAcceptPlayers()) {
@@ -153,21 +161,65 @@ function handleJoinGame(socket, data) {
     return;
   }
   
+  // Determine player ID: use wallet address if provided, otherwise socket.id
+  let playerId = socket.id;
+  let finalPlayerName = playerName;
+  
+  if (walletAddress) {
+    // Validate wallet address format
+    if (!validateWalletAddress(walletAddress)) {
+      socket.emit('joinGameResponse', {
+        success: false,
+        message: 'Invalid wallet address format. Please connect a valid Ethereum wallet.',
+        playerId: null
+      });
+      return;
+    }
+    
+    // Use wallet address as player ID for Web3 players
+    playerId = walletAddress;
+    
+    // If player name is not provided or is just the formatted address, generate it
+    if (!playerName || playerName === 'Unknown') {
+      finalPlayerName = formatWalletAddress(walletAddress);
+    }
+    
+    console.log(`Web3 player joining with wallet: ${walletAddress} -> ${finalPlayerName}`);
+  }
+  
+  // Check if player with this ID already exists (prevent duplicate wallet connections)
+  if (playerId !== socket.id) {
+    // For wallet-based players, check if wallet is already connected
+    const existingPlayer = Array.from(connectedClients.values()).find(
+      client => client.walletAddress === walletAddress
+    );
+    
+    if (existingPlayer) {
+      socket.emit('joinGameResponse', {
+        success: false,
+        message: 'This wallet is already connected to the game.',
+        playerId: null
+      });
+      return;
+    }
+  }
+  
   // Add player to game state
-  const success = addPlayer(socket.id, playerName);
+  const success = addPlayer(playerId, finalPlayerName, walletAddress);
   
   if (success) {
     // Update client info
     const clientInfo = connectedClients.get(socket.id);
     if (clientInfo) {
-      clientInfo.playerName = playerName;
+      clientInfo.playerName = finalPlayerName;
+      clientInfo.walletAddress = walletAddress;
     }
     
     // Acknowledge successful join
     socket.emit('joinGameResponse', {
       success: true,
-      message: `Welcome ${playerName}!`,
-      playerId: socket.id,
+      message: `Welcome ${finalPlayerName}!`,
+      playerId: playerId, // Return the actual player ID (wallet address or socket.id)
       playerCount: getPlayerCount(),
       maxPlayers: 6
     });
@@ -187,7 +239,10 @@ function handleJoinGame(socket, data) {
 // Step 5.1: Handle optimized player position updates
 function handlePlayerPosition(socket, data) {
   console.log('handlePlayerPosition', data);
-  const playerId = socket.id;
+  
+  // Get the actual player ID (wallet address if Web3 player, socket.id otherwise)
+  const clientInfo = connectedClients.get(socket.id);
+  const playerId = clientInfo?.walletAddress || socket.id;
   
   // Validate incoming data structure
   if (!data || !data.position || !data.rotation) {
@@ -234,7 +289,9 @@ function handlePlayerPosition(socket, data) {
 
 // Handle weapon pickup collection events
 function handleWeaponPickupCollectionEvent(socket, data) {
-  const playerId = socket.id;
+  // Get the actual player ID (wallet address if Web3 player, socket.id otherwise)
+  const clientInfo = connectedClients.get(socket.id);
+  const playerId = clientInfo?.walletAddress || socket.id;
   const { weaponBoxId } = data || {};
   
   if (!weaponBoxId) {
@@ -265,7 +322,9 @@ function handleWeaponPickupCollectionEvent(socket, data) {
 
 // Step 7.2: Handle missile fire events
 function handleMissileFireEvent(socket, data) {
-  const playerId = socket.id;
+  // Get the actual player ID (wallet address if Web3 player, socket.id otherwise)
+  const clientInfo = connectedClients.get(socket.id);
+  const playerId = clientInfo?.walletAddress || socket.id;
   const { missileId, shooterId, position, direction } = data || {};
   
   // Validate incoming data
@@ -303,7 +362,9 @@ function handleMissileFireEvent(socket, data) {
 
 // Step 7.4: Handle missile hit events and process eliminations
 function handleMissileHitEvent(socket, data) {
-  const reporterId = socket.id;
+  // Get the actual player ID (wallet address if Web3 player, socket.id otherwise)
+  const clientInfo = connectedClients.get(socket.id);
+  const reporterId = clientInfo?.walletAddress || socket.id;
   const { missileId, shooterId, targetId, hitPosition } = data || {};
   
   // Validate incoming data
@@ -411,8 +472,21 @@ function findSafeSpawnPosition(playerId, maxAttempts = 10) {
 
 // Step 8.2: Respawn eliminated player with random position
 function respawnPlayer(playerId) {
-  // Check if player is still connected
-  if (!connectedClients.has(playerId)) {
+  // Check if player is still connected (need to find by wallet address if applicable)
+  let isConnected = false;
+  
+  // Check if this is a socket ID connection
+  if (connectedClients.has(playerId)) {
+    isConnected = true;
+  } else {
+    // Check if this is a wallet address - find the corresponding socket
+    const clientWithWallet = Array.from(connectedClients.values()).find(
+      client => client.walletAddress === playerId
+    );
+    isConnected = !!clientWithWallet;
+  }
+  
+  if (!isConnected) {
     console.log(`Cannot respawn player ${playerId} - not connected`);
     return;
   }
