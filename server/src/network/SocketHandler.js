@@ -472,9 +472,24 @@ export function broadcastGameState() {
   }
 }
 
+// Step 9.4: Leaderboard broadcast throttling
+let lastLeaderboardBroadcast = 0;
+const LEADERBOARD_THROTTLE_INTERVAL = 1000; // 1 second minimum between broadcasts
+
 export function broadcastLeaderboard() {
+  const now = Date.now();
+  
+  // Throttle leaderboard broadcasts to avoid spam
+  if (now - lastLeaderboardBroadcast < LEADERBOARD_THROTTLE_INTERVAL) {
+    console.log('📊 Leaderboard broadcast throttled');
+    return;
+  }
+  
   const leaderboard = getLeaderboard();
   broadcastToAll('leaderboardUpdate', { leaderboard });
+  lastLeaderboardBroadcast = now;
+  
+  console.log(`📊 Leaderboard broadcasted with ${leaderboard.length} players`);
 }
 
 // Get connected client count

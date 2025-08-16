@@ -96,6 +96,11 @@ export function initWebSocket() {
   socket.on('playerRespawned', (data) => {
     handlePlayerRespawned(data);
   });
+  
+  // Step 9.3: Listen for leaderboard updates
+  socket.on('leaderboardUpdate', (data) => {
+    handleLeaderboardUpdate(data);
+  });
 }
 
 export function getSocket() {
@@ -315,6 +320,13 @@ export function setRespawnCallback(callback) {
   respawnCallback = callback;
 }
 
+// Step 9.3: Leaderboard callback for client-side updates
+let leaderboardCallback = null;
+
+export function setLeaderboardCallback(callback) {
+  leaderboardCallback = callback;
+}
+
 // Step 7.4: Handle player respawn events from server
 function handlePlayerRespawned(data) {
   const { playerId, spawnPosition } = data;
@@ -328,6 +340,18 @@ function handlePlayerRespawned(data) {
   
   // Player state will be updated via game state broadcast
   // The respawn is mainly for visual/audio feedback
+}
+
+// Step 9.3: Handle leaderboard updates from server
+function handleLeaderboardUpdate(data) {
+  const { leaderboard } = data;
+  
+  console.log(`📊 Leaderboard update received with ${leaderboard ? leaderboard.length : 0} players`);
+  
+  // Call leaderboard callback for UI updates
+  if (leaderboardCallback && leaderboard) {
+    leaderboardCallback(leaderboard);
+  }
 }
 
 // Get game state receiving statistics
