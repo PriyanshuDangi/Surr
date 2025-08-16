@@ -1,8 +1,8 @@
 // Flow Testnet Configuration
 const FLOW_CONFIG = {
   // Flow Network Settings
-  TESTNET_RPC: 'https://rest-testnet.onflow.org',
-  ACCESS_NODE: 'https://rest-testnet.onflow.org',
+  TESTNET_RPC: '	https://testnet.evm.nodes.onflow.org',
+  ACCESS_NODE: 'https://evm-testnet.flowscan.io',
   
   // Contract Configuration
   SURR_TOKEN_ADDRESS: '0xDE8c68317AB8699A37E208Ef6EE7Ef8E173707E1', // Update when contract is deployed
@@ -16,4 +16,4 @@ const FLOW_CONFIG = {
   // NODE_ENV: process.env.NODE_ENV || 'development'
 };
 
-module.exports = FLOW_CONFIG;
+export default FLOW_CONFIG;
