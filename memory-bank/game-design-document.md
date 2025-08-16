@@ -60,25 +60,29 @@
 
 ### Frontend:
 - **Rendering:** Three.js
-- **Physics:** Cannon.js (or Cannon-es for a more modern version)
+- **Physics:** Cannon-es (upgraded from legacy Cannon.js)
 - **Language:** JavaScript
 - **Build Tool:** Vite
+- **Code Formatting:** Prettier
 
 ### Backend:
-- **Server:** Node.js with Express
+- **Server:** Node.js v20 with Express
 - **Real-time Communication:** Socket.IO
+- **Testing:** Jest
+- **Code Formatting:** Prettier
 
 ### Assets:
-- **Car Model:** A single .glb file for the player kart.
+- **Car Model:** A single car.glb file for the player kart (stored in client/assets/)
+- **Arena:** 100x100 unit flat ground plane with visible boundary walls
+- **Weapon Pickups:** Simple box geometry at 9 predefined equidistant locations
 
 ## 4. Game Assets
 
 ### 3D Models:
-- **kart.glb:** A low-poly, stylized racing kart.
-<!-- - **missile.glb:** A simple missile model. -->
-<!-- - **arena.glb:** A simple arena with basic obstacles, ramps, and boundaries. -->
-missile.glb - create a simple poly missile 
-arena.glb - for now have a simple flat ground 
+- **car.glb:** A low-poly, stylized racing kart 
+- **Arena:** Simple 100x100 unit flat ground plane with visible boundary walls
+- **Missiles:** Generated procedurally using simple geometry
+- **Weapon Pickups:** Simple box geometry at predefined locations 
 
 ### UI Elements:
 - Leaderboard display.
@@ -88,21 +92,20 @@ arena.glb - for now have a simple flat ground
 
 ## 5. Multiplayer Architecture (Client-Server)
 
-**No server-side rendering is required** - the server only manages game state position, direction of all the clients. 
+**No server-side rendering is required** - the server only manages game state and receives updates only when there are position, direction or state changes from clients. Target: 6 concurrent players maximum. 
 
 ### Server-Side (Node.js + Socket.IO)
 
 **Responsibilities:**
 - Manage player connections and disconnections.
-- **Receive and maintain player positions** from frontend clients.
+- **Receive and maintain player positions** from frontend clients (only on position/rotation/state changes).
 - **Maintain weapon state for each client** (missile or null).
-- **Maintain death state for each player** (alive/dead with respawn timer).
+- **Maintain death state for each player** (isAlive boolean with respawn timer).
 - **Maintain weaponbox state** - spawn locations and collection status.
 - **Handle weaponbox collection** - remove collected boxes and broadcast updates.
-- **Refresh weaponbox state every 15 seconds** - respawn new weapon pickups.
+- **Refresh weaponbox state every 15 seconds** - respawn new weapon pickups at 9 predefined locations.
 - **Maintain the leaderboard** and update it on every kill/elimination.
-- Handle player inputs for movement and shooting.
-- **Receive missile hit notifications from shooters and manage player eliminations.**
+- **Receive missile hit notifications from shooters and manage player eliminations** (no server-side validation).
 - **Broadcast missile positions to all players for real-time visualization.**
 - **Broadcast updated game state to all clients** at a regular interval (tick rate), including current player positions, weapon states, death states, weaponbox states, and leaderboard.
 - Manage the leaderboard.
@@ -110,8 +113,8 @@ arena.glb - for now have a simple flat ground
 **Socket Events (Server listening for):**
 - `connection:` A new player joins.
 - `joinGame:` Player provides their name and is added to the game session.
-- `playerInput:` Receives a player's movement and action inputs.
-- `playerPosition:` Receives updated player position from frontend.
+
+- `playerPosition:` Receives updated player position from frontend (only on changes).
 - `missileHit:` Receives missile hit notification from shooter client.
 - `weaponboxCollected:` Receives weaponbox collection notification from player.
 - `disconnect:` A player leaves the game.
@@ -125,9 +128,10 @@ arena.glb - for now have a simple flat ground
 
 **Responsibilities:**
 - Render the game world, karts, and projectiles using Three.js.
-- Capture player input and send it to the server.
-- **Send player position updates to the server** as they move.
+- Capture player input for local movement processing.
+- **Send player position updates to the server** only when position, rotation, or state changes.
 - Receive game state updates from the server and interpolate positions to smooth out movement.
+- Handle client-side collision detection for missiles and kart-to-kart collisions.
 - Display the UI, including the real-time leaderboard updates.
 
 **Socket Events (Client listening for):**
@@ -138,6 +142,6 @@ arena.glb - for now have a simple flat ground
 
 **Socket Events (Client sending):**
 - `playerPosition:` Sends current player position to server.
-- `playerInput:` Sends movement and action inputs to server.
+
 - `missileHit:` Sends missile hit notification to server when collision detected.
 
