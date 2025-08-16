@@ -67,7 +67,7 @@ export function getCamera() { /* ... */ }
 - `addObject()`/`removeObject()` - Scene graph management
 
 **Scene Components**:
-- **Arena**: 100x100 ground plane with visible boundary walls
+- **Arena**: 100x100 ground plane with visible boundary walls (center reference ball removed)
 - **Camera**: Perspective camera with OrbitControls
 - **Lighting**: Ambient + directional lighting
 - **Renderer**: WebGL with shadow mapping
@@ -195,6 +195,7 @@ export function addConnectionCallback(callback) { /* ... */ }
 - **Connection callbacks** - UI integration for status updates
 - **Game state handling** - Centralized server data processing
 - **Join/leave system** - Player name-based joining with server responses
+- **Weapon collection system** - Server-validated weapon pickup with immediate client feedback
 
 **Position Broadcasting** (Step 5.1):
 - **Throttling**: 50ms minimum interval between sends
@@ -272,6 +273,7 @@ export function collectWeaponBox(id) { /* ... */ }
 - **Auto-respawn**: 15-second timer using setTimeout
 - **9 predefined locations** - equidistant placement
 - **Availability tracking** - prevents double collection
+- **No cooldowns**: Removed collection and firing cooldowns for immediate gameplay
 
 ### Networking
 
@@ -337,6 +339,7 @@ export function handleJoinGame(socket, data) { /* ... */ }
 - **Interpolation buffering** - 5-update buffer per remote player
 - **Teleportation handling** - Large jump detection (>20 units)
 - **Memory management** - Automatic buffer cleanup and player disposal
+- **Cooldown removal** - Eliminated firing and collection cooldowns for responsive gameplay
 
 ---
 
