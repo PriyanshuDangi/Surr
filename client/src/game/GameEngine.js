@@ -1,202 +1,125 @@
 // Surr Game - Game Engine
-// Main game controller that manages the game loop, initialization, and coordination between systems
+// Function-based game controller that manages the game loop and coordination
 
-import { Scene } from './Scene.js';
-import { initWebSocket, getSocket, isSocketConnected } from '../network/SocketManager.js';
+import { initScene, updateScene, renderScene, disposeScene } from './Scene.js';
+import { initWebSocket, isSocketConnected } from '../network/SocketManager.js';
 import Stats from 'stats.js';
 
-export class GameEngine {
-  constructor() {
-    this.canvas = null;
-    this.scene = null;
-    this.isRunning = false;
-    this.lastTime = 0;
-    this.deltaTime = 0;
+// Game state
+let canvas = null;
+let isRunning = false;
+let lastTime = 0;
+let deltaTime = 0;
+let stats = null;
+
+// Initialize the game engine
+export async function initGameEngine() {
+  try {
+    console.log('Initializing game engine...');
     
-    // Performance monitoring with Stats.js
-    this.stats = new Stats();
-    this.stats.showPanel(0); // 0: fps, 1: ms, 2: mb, 3+: custom
+    // Get canvas element
+    canvas = document.getElementById('gameCanvas');
+    if (!canvas) {
+      throw new Error('Canvas element not found');
+    }
+
+    // Setup Stats.js
+    stats = new Stats();
+    stats.showPanel(0);
+    stats.dom.style.position = 'absolute';
+    stats.dom.style.top = '0px';
+    stats.dom.style.left = '0px';
+    stats.dom.style.zIndex = '1001';
+    document.body.appendChild(stats.dom);
+
+    // Initialize scene
+    initScene(canvas);
+
+    // Initialize websocket
+    initWebSocket();
     
-    console.log('GameEngine initialized');
-  }
-
-  // Initialize the game engine
-  async init() {
-    try {
-      console.log('Initializing game engine...');
-      
-      // Get canvas element
-      this.canvas = document.getElementById('gameCanvas');
-      if (!this.canvas) {
-        throw new Error('Canvas element not found');
-      }
-
-      // Add Stats.js to the page
-      this.stats.dom.style.position = 'absolute';
-      this.stats.dom.style.top = '0px';
-      this.stats.dom.style.left = '0px';
-      this.stats.dom.style.zIndex = '1001';
-      document.body.appendChild(this.stats.dom);
-
-      // Initialize scene
-      this.scene = new Scene(this.canvas);
-
-      // Initialize websocket
-      initWebSocket();
-      
-      // Setup game loop
-      this.setupGameLoop();
-      
-      console.log('Game engine initialization complete');
-      return true;
-    } catch (error) {
-      console.error('Failed to initialize game engine:', error);
-      return false;
-    }
-  }
-
-  // Set up the main game loop
-  setupGameLoop() {
-    this.lastTime = performance.now();
-    this.isRunning = true;
+    // Setup game loop
+    setupGameLoop();
     
-    // Start the game loop
-    this.gameLoop();
-    console.log('Game loop started');
+    console.log('Game engine initialization complete');
+    return true;
+  } catch (error) {
+    console.error('Failed to initialize game engine:', error);
+    return false;
   }
+}
 
+// Set up the main game loop
+function setupGameLoop() {
+  lastTime = performance.now();
+  isRunning = true;
+  
+  gameLoop();
+  console.log('Game loop started');
+}
 
+// Main game loop
+function gameLoop(currentTime = performance.now()) {
+  if (!isRunning) return;
 
-  // Main game loop using requestAnimationFrame
-  gameLoop = (currentTime = performance.now()) => {
-    if (!this.isRunning) return;
+  stats.begin();
 
-    // Stats.js begin frame measurement
-    this.stats.begin();
+  deltaTime = (currentTime - lastTime) / 1000;
+  lastTime = currentTime;
 
-    // Calculate delta time
-    this.deltaTime = (currentTime - this.lastTime) / 1000; // Convert to seconds
-    this.lastTime = currentTime;
+  updateScene(deltaTime);
+  renderScene();
 
-    // Update game systems
-    this.update(this.deltaTime);
+  stats.end();
+  requestAnimationFrame(gameLoop);
+}
 
-    // Render the scene
-    this.render();
-
-    // Stats.js end frame measurement
-    this.stats.end();
-
-    // Continue the loop
-    requestAnimationFrame(this.gameLoop);
+// Start the game engine
+export function startGameEngine() {
+  if (!isRunning) {
+    console.log('Starting game engine...');
+    setupGameLoop();
   }
+}
 
-  // Update all game systems
-  update(deltaTime) {
-    // Update scene animations
-    if (this.scene) {
-      this.scene.update(deltaTime);
-    }
+// Stop the game engine
+export function stopGameEngine() {
+  console.log('Stopping game engine...');
+  isRunning = false;
+}
 
-    // Future: Update physics, players, weapons, etc.
-    // These will be implemented in later phases
-  }
-
-  // Render the current frame
-  render() {
-    if (this.scene) {
-      this.scene.render();
-    }
-  }
-
-
-
-  // Start the game engine
-  start() {
-    if (!this.isRunning) {
-      console.log('Starting game engine...');
-      this.setupGameLoop();
-    }
-  }
-
-  // Stop the game engine
-  stop() {
-    console.log('Stopping game engine...');
-    this.isRunning = false;
-  }
-
-  // Resume the game engine
-  resume() {
-    if (!this.isRunning) {
-      console.log('Resuming game engine...');
-      this.lastTime = performance.now();
-      this.isRunning = true;
-      this.gameLoop();
-    }
-  }
-
-  // Pause the game engine
-  pause() {
-    console.log('Pausing game engine...');
-    this.isRunning = false;
-  }
-
-
-
-  // Get delta time
-  getDeltaTime() {
-    return this.deltaTime;
-  }
-
-  // Get scene reference
-  getScene() {
-    return this.scene;
-  }
-
-  // Handle window focus/blur for performance
-  handleVisibilityChange() {
+// Setup visibility change handling
+export function setupVisibilityHandling() {
+  document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
-      this.pause();
+      console.log('Pausing game engine...');
+      isRunning = false;
     } else {
-      this.resume();
+      console.log('Resuming game engine...');
+      lastTime = performance.now();
+      isRunning = true;
+      gameLoop();
     }
+  });
+}
+
+// Cleanup and dispose resources
+export function disposeGameEngine() {
+  console.log('Disposing game engine...');
+  stopGameEngine();
+  
+  disposeScene();
+
+  if (stats && stats.dom && stats.dom.parentNode) {
+    stats.dom.parentNode.removeChild(stats.dom);
   }
+}
 
-  // Setup visibility change handling
-  setupVisibilityHandling() {
-    document.addEventListener('visibilitychange', () => {
-      this.handleVisibilityChange();
-    });
-  }
-
-
-
-  // Cleanup and dispose resources
-  dispose() {
-    console.log('Disposing game engine...');
-    this.stop();
-    
-    if (this.scene) {
-      this.scene.dispose();
-    }
-
-
-
-    // Remove Stats.js display
-    if (this.stats && this.stats.dom && this.stats.dom.parentNode) {
-      this.stats.dom.parentNode.removeChild(this.stats.dom);
-    }
-
-    // Remove event listeners
-    document.removeEventListener('visibilitychange', this.handleVisibilityChange);
-  }
-
-  // Debug information
-  getDebugInfo() {
-    return {
-      deltaTime: this.deltaTime,
-      isRunning: this.isRunning,
-      socketConnected: isSocketConnected()
-    };
-  }
+// Get debug information
+export function getDebugInfo() {
+  return {
+    deltaTime,
+    isRunning,
+    socketConnected: isSocketConnected()
+  };
 }
