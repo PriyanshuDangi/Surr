@@ -9,9 +9,10 @@
 - Create root directory `Surr/`
 - Create `client/` directory for frontend code
 - Create `server/` directory for backend code
-- Create `assets/` directory for 3D models and textures
+- Create `client/assets/` directory for 3D models (car.glb only)
 - Initialize `package.json` in both `client/` and `server/` directories
 - Set up `.gitignore` files for both directories
+- Use Node.js version 20 for both client and server
 
 **Test:** Verify directory structure exists and both package.json files are properly initialized.
 
@@ -21,7 +22,7 @@
 **Actions:**
 - Install Vite as dev dependency in `client/`
 - Install Three.js as dependency in `client/`
-- Install cannon-es (modern Cannon.js) as dependency in `client/`
+- Install cannon-es (upgraded from legacy Cannon.js) as dependency in `client/`
 - Install socket.io-client as dependency in `client/`
 - Configure Vite config file for development server
 
@@ -35,6 +36,7 @@
 - Install Socket.IO server package in `server/`
 - Install cors middleware for cross-origin requests
 - Install nodemon as dev dependency for auto-restart during development
+- Install prettier for code formatting and linting
 
 **Test:** Run `npm install` successfully and verify all packages appear in `package.json`.
 
@@ -61,10 +63,10 @@
 - Create basic Express server in `server/src/server.js`
 - Configure CORS middleware for client connections
 - Set up static file serving for client assets
-- Configure server to listen on port 3000
+- Configure server to listen on port 5173
 - Add basic error handling and logging
 
-**Test:** Start server with `node server.js` and verify it runs without errors on port 3000.
+**Test:** Start server with `node server.js` and verify it runs without errors on port 5173.
 
 ### Step 2.2: Integrate Socket.IO Server
 **Objective:** Add real-time communication capabilities to the server.
@@ -196,7 +198,7 @@
 
 **Actions:**
 - Create server-side `Player.js` class to track player state
-- Add properties for ID, name, position, rotation, score
+- Add properties for ID, name, position, rotation, score, isAlive, weapon (missile or null)
 - Add methods to update position and validate player data
 - Integrate player management with GameState.js
 - Add method to serialize player data for network transmission
@@ -210,8 +212,8 @@
 
 **Actions:**
 - Add position update event to client SocketManager
-- Send player position data to server at regular intervals (20Hz)
-- Include position, rotation, and velocity in updates
+- Send player position data to server only when position, rotation, or state changes
+- Include position, rotation, and player state in updates (no velocity needed)
 - Add throttling to prevent excessive network traffic
 - Add error handling for network issues
 
@@ -260,7 +262,8 @@
 
 **Actions:**
 - Create physics world in Scene.js with proper gravity settings
-- Add ground plane as static physics body
+- Add 100x100 unit flat ground plane as static physics body
+- Add visible walls around arena perimeter for boundaries
 - Set up physics step timing in game loop
 - Configure collision detection parameters
 - Add debug renderer to visualize physics bodies
@@ -276,6 +279,7 @@
 - Replace simple movement with physics-based forces
 - Adjust mass, friction, and restitution for realistic kart behavior
 - Add constraints to prevent tipping over
+- Add collision detection between player karts
 
 **Test:** Player kart has realistic acceleration, deceleration, and turning physics.
 
@@ -363,6 +367,8 @@
 - Add methods to spawn pickups at random arena locations
 - Implement 15-second respawn timer for collected pickups
 - Add collision detection for pickup collection
+- Place 9 weapon pickups at predefined equidistant locations
+- Use simple box geometry for weapon pickup visualization
 - Track weapon pickup states in game state
 
 **Test:** Server spawns weapon pickups and handles collection/respawn timing correctly.
@@ -447,9 +453,8 @@
 **Actions:**
 - Send missile hit event to server when collision detected
 - Include shooter ID, target ID, and hit position in event
-- Add server validation for hit reports
-- Handle network latency and hit confirmation
-- Add safeguards against cheating/false reports
+- Server accepts hit reports without validation (client authoritative)
+- Handle network latency for hit confirmation
 
 **Test:** Server receives and processes hit reports from shooting clients.
 
@@ -460,7 +465,7 @@
 
 **Actions:**
 - Process missile hit events from clients
-- Validate hit reports for legitimacy
+- Accept hit reports without server-side validation
 - Award points to shooter and eliminate target
 - Set elimination timer (5 seconds) for respawn
 - Broadcast elimination event to all clients
@@ -659,7 +664,7 @@
 **Objective:** Create test suite for core functionality.
 
 **Actions:**
-- Set up testing framework for server-side logic
+- Set up Jest testing framework for server-side logic
 - Create unit tests for game state management
 - Add integration tests for socket communication
 - Test physics calculations and collision detection
@@ -671,7 +676,7 @@
 **Objective:** Verify multiplayer functionality works correctly.
 
 **Actions:**
-- Test with maximum expected player count
+- Test with maximum expected player count (6 players)
 - Verify synchronization across multiple clients
 - Test edge cases (rapid connection/disconnection)
 - Validate leaderboard accuracy across clients
@@ -717,17 +722,18 @@
 
 **Test:** Documentation is complete and helps new developers understand the codebase.
 
-### Step 15.2: Deployment Preparation
-**Objective:** Prepare for production deployment.
+### Step 15.2: Local Development Setup
+**Objective:** Ensure smooth local development experience.
 
 **Actions:**
-- Configure production build scripts for client
-- Set up environment variables for server configuration
-- Add production-ready error handling and logging
-- Configure HTTPS and secure WebSocket connections
-- Add monitoring and health check endpoints
+- Configure development build scripts for client (Vite)
+- Set up local environment variables for server configuration  
+- Add development-ready error handling and logging
+- Configure local HTTP and WebSocket connections
+- Add basic health check endpoints for development
+- Use prettier for consistent code formatting
 
-**Test:** Game builds and deploys successfully in production environment.
+**Test:** Game builds and runs successfully in local development environment.
 
 ### Step 15.3: User Guide Creation
 **Objective:** Help players understand how to play the game.
