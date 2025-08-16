@@ -7,7 +7,10 @@ import {
   canAcceptPlayers, 
   getPlayerCount, 
   getGameStateForBroadcast, 
-  getLeaderboard 
+  getLeaderboard,
+  updatePlayerPosition,
+  updatePlayerWeapon,
+  setPlayerAliveStatus
 } from '../game/GameState.js';
 
 // Connected clients state
@@ -53,8 +56,12 @@ function setupEventListeners(socket) {
     handleJoinGame(socket, data);
   });
 
+  // Step 5.1: Handle optimized player position updates
+  socket.on('playerPosition', (data) => {
+    handlePlayerPosition(socket, data);
+  });
+
   // Placeholder for future events:
-  // - playerPosition
   // - missileHit  
   // - weaponboxCollected
 }
@@ -116,6 +123,52 @@ function handleJoinGame(socket, data) {
       message: 'Failed to join game. Please try again.',
       playerId: null
     });
+  }
+}
+
+// Step 5.1: Handle optimized player position updates
+function handlePlayerPosition(socket, data) {
+  console.log('handlePlayerPosition', data);
+  const playerId = socket.id;
+  
+  // Validate incoming data structure
+  if (!data || !data.position || !data.rotation) {
+    console.log(`Invalid position data from player ${playerId}`);
+    return;
+  }
+  
+  // Update player position in game state
+  const positionUpdated = updatePlayerPosition(playerId, data.position, data.rotation);
+  
+  if (positionUpdated) {
+    // Update weapon state if provided
+    if (data.weapon !== undefined) {
+      updatePlayerWeapon(playerId, data.weapon);
+    }
+    
+    // Update alive status if provided
+    if (data.isAlive !== undefined) {
+      setPlayerAliveStatus(playerId, data.isAlive);
+    }
+    
+    // Note: We don't broadcast every position update immediately
+    // The server will broadcast game state at its own tick rate (20Hz)
+    // This reduces server load and network traffic
+  }
+  
+  // Log position updates periodically for debugging (throttled)
+  if (!handlePlayerPosition.lastLogTime) {
+    handlePlayerPosition.lastLogTime = 0;
+    handlePlayerPosition.updateCount = 0;
+  }
+  
+  handlePlayerPosition.updateCount++;
+  const now = Date.now();
+  
+  if (now - handlePlayerPosition.lastLogTime > 5000) { // Log every 5 seconds
+    console.log(`📍 Position updates received: ${handlePlayerPosition.updateCount} in last 5s from ${getPlayerCount()} players`);
+    handlePlayerPosition.lastLogTime = now;
+    handlePlayerPosition.updateCount = 0;
   }
 }
 
