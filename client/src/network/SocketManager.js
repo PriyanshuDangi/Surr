@@ -102,6 +102,11 @@ export function initWebSocket() {
   socket.on('leaderboardUpdate', (data) => {
     handleLeaderboardUpdate(data);
   });
+  
+  // Step 2.4: Listen for round events
+  socket.on('roundEvent', (data) => {
+    handleRoundEvent(data);
+  });
 }
 
 export function getSocket() {
@@ -334,6 +339,13 @@ export function setLeaderboardCallback(callback) {
   leaderboardCallback = callback;
 }
 
+// Step 2.4: Round event callback for client-side round notifications
+let roundEventCallback = null;
+
+export function setRoundEventCallback(callback) {
+  roundEventCallback = callback;
+}
+
 // Step 7.4: Handle player respawn events from server
 function handlePlayerRespawned(data) {
   const { playerId, spawnPosition } = data;
@@ -358,6 +370,16 @@ function handleLeaderboardUpdate(data) {
   // Call leaderboard callback for UI updates
   if (leaderboardCallback && leaderboard) {
     leaderboardCallback(leaderboard);
+  }
+}
+
+// Step 2.4: Handle round events from server
+function handleRoundEvent(data) {
+  console.log(`🎯 Round event received: ${data.type} - ${data.message}`);
+  
+  // Call round event callback for UI updates
+  if (roundEventCallback) {
+    roundEventCallback(data);
   }
 }
 
