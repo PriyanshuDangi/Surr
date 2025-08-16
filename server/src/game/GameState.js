@@ -1,6 +1,8 @@
 // Surr Game - Game State Manager
 // Function-based game state management
 
+import { createPlayer, validatePlayerPosition, validatePlayerRotation, serializePlayer, validateWeapon } from './Player.js';
+
 // Game state
 let players = new Map();
 let weaponBoxes = new Map();
@@ -28,17 +30,8 @@ export function addPlayer(playerId, playerName) {
     return false;
   }
 
-  const player = {
-    id: playerId,
-    name: playerName,
-    position: { x: 0, y: 0, z: 0 },
-    rotation: { x: 0, y: 0, z: 0 },
-    score: 0,
-    isAlive: true,
-    weapon: null,
-    joinedAt: Date.now()
-  };
-
+  // Use Player.js utility to create standardized player object
+  const player = createPlayer(playerId, playerName);
   players.set(playerId, player);
   console.log(`Player added: ${playerName} (${playerId})`);
   return true;
@@ -56,12 +49,19 @@ export function removePlayer(playerId) {
 
 export function updatePlayerPosition(playerId, position, rotation) {
   const player = players.get(playerId);
-  if (player) {
-    player.position = { ...position };
-    player.rotation = { ...rotation };
-    return true;
+  if (!player) {
+    return false;
   }
-  return false;
+
+  // Validate incoming data using Player.js utilities
+  if (!validatePlayerPosition(position) || !validatePlayerRotation(rotation)) {
+    console.log(`Invalid position/rotation data for player ${playerId}`);
+    return false;
+  }
+
+  player.position = { ...position };
+  player.rotation = { ...rotation };
+  return true;
 }
 
 export function getPlayer(playerId) {
@@ -83,8 +83,11 @@ export function canAcceptPlayers() {
 // Game state functions
 
 export function getGameStateForBroadcast() {
+  // Serialize all players for network transmission
+  const serializedPlayers = getAllPlayers().map(player => serializePlayer(player));
+  
   return {
-    players: getAllPlayers(),
+    players: serializedPlayers,
     playerCount: getPlayerCount(),
     maxPlayers,
     gameStarted,
@@ -109,6 +112,35 @@ export function awardPoints(playerId, points = 1) {
     player.score += points;
     console.log(`Player ${player.name} awarded ${points} points. Total: ${player.score}`);
   }
+}
+
+// Update player weapon status
+export function updatePlayerWeapon(playerId, weapon) {
+  const player = players.get(playerId);
+  if (player && validateWeapon(weapon)) {
+    player.weapon = weapon; // 'missile' or null
+    return true;
+  }
+  return false;
+}
+
+// Set player alive status
+export function setPlayerAliveStatus(playerId, isAlive) {
+  const player = players.get(playerId);
+  if (player) {
+    player.isAlive = isAlive;
+    if (!isAlive) {
+      player.weapon = null; // Remove weapon when dead
+    }
+    return true;
+  }
+  return false;
+}
+
+// Get serialized player data for a specific player
+export function getSerializedPlayer(playerId) {
+  const player = players.get(playerId);
+  return player ? serializePlayer(player) : null;
 }
 
 export function resetGameState() {

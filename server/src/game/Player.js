@@ -43,3 +43,53 @@ export function serializePlayer(player) {
     weapon: player.weapon
   };
 }
+
+// Validate player name
+export function validatePlayerName(name) {
+  return typeof name === 'string' && 
+         name.trim().length > 0 && 
+         name.trim().length <= 20;
+}
+
+// Validate weapon type
+export function validateWeapon(weapon) {
+  return weapon === null || weapon === 'missile';
+}
+
+// Update player position safely with validation
+export function updatePlayerData(player, updates) {
+  const updatedPlayer = { ...player };
+  
+  if (updates.position && validatePlayerPosition(updates.position)) {
+    updatedPlayer.position = { ...updates.position };
+  }
+  
+  if (updates.rotation && validatePlayerRotation(updates.rotation)) {
+    updatedPlayer.rotation = { ...updates.rotation };
+  }
+  
+  if (updates.weapon !== undefined && validateWeapon(updates.weapon)) {
+    updatedPlayer.weapon = updates.weapon;
+  }
+  
+  if (typeof updates.isAlive === 'boolean') {
+    updatedPlayer.isAlive = updates.isAlive;
+    // Remove weapon if player dies
+    if (!updates.isAlive) {
+      updatedPlayer.weapon = null;
+    }
+  }
+  
+  if (typeof updates.score === 'number' && updates.score >= 0) {
+    updatedPlayer.score = updates.score;
+  }
+  
+  return updatedPlayer;
+}
+
+// Check if position is within arena bounds
+export function isPositionInBounds(position, arenaSize = 100) {
+  const halfSize = arenaSize / 2;
+  return position.x >= -halfSize && position.x <= halfSize &&
+         position.z >= -halfSize && position.z <= halfSize;
+}
