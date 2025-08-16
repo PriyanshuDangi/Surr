@@ -130,114 +130,205 @@
 **Test**: TokenManager successfully connects to deployed contract. `getBalance()` returns correct token balance for connected wallet.
 
 ## Phase 2: Continuous Gameplay & Kill-to-Earn
-### ### Step 2.1: Implement Server Game Timer
 
-**Objective**: Create continuous 3-minute game rounds with automatic reset.
+### Step 2.1: Implement Smart Round Management System
 
-**Actions**:
-- Add `roundEndTime` property to GameState class
-- Create `startNewRound()` method that sets 3-minute timer
-- Add `getRemainingTime()` method to calculate time left
-- Implement timer check in main server loop
-- Add round reset logic that clears scores and restarts timer
-
-**Test**: Server starts with 3-minute countdown. Timer automatically resets to 3 minutes when reaching zero.
-### ### Step 2.2: Add Round Timer Broadcasting
-
-**Objective**: Send remaining round time to all clients.
+**Objective**: Create round-based gameplay that starts when first player connects and manages player states properly.
 
 **Actions**:
-- Include remaining time in server gameState broadcasts
-- Add timer display to client UI
-- Update timer display every second on client
-- Add visual indicators for round ending (countdown, color changes)
-- Handle timer synchronization across clients
+- Add round management properties to GameState class:
+  - `currentRound` (object): tracks round state, start time, participants
+  - `roundDuration` (3 minutes constant)
+  - `isRoundActive` (boolean): indicates if round is running
+- Create `startNewRound()` method triggered when first player connects
+- Add `endCurrentRound()` method that processes rewards and resets
+- Implement `getRemainingTime()` method to calculate time left
+- Add logic to prevent new rounds when no players connected
+- Track only `roundKills` in Player class (no lifetime scoring in Phase 2)
 
-**Test**: All clients display synchronized countdown timer. Timer resets to 3:00 when round ends.
-### ### Step 2.3: Track Kills Per Round
+**Test**: Round starts when first player joins. No round runs when server is empty. Round timer counts down correctly.
 
-**Objective**: Count player kills separately for each round.
+### Step 2.2: Enhanced Player State Management
 
-**Actions**:
-- Add `roundKills` property to server Player class
-- Modify missile hit processing to increment round kills instead of total score
-- Reset round kills to zero when new round starts
-- Keep separate permanent score for leaderboard display
-- Update leaderboard to show round kills and total score
-
-**Test**: Player round kills increment with each elimination. Round kills reset to zero when timer restarts.
-### ### Step 2.4: Create Reward Calculation System
-
-**Objective**: Calculate token rewards based on round performance.
+**Objective**: Implement proper player state tracking with active/inactive status for round-based gameplay.
 
 **Actions**:
-- Define reward rate (e.g., 10 tokens per kill)
-- Create `calculateRewards()` method in GameState
-- Add reward calculation at round end for all players with kills
-- Store pending rewards for each player
-- Add reward notification system for players
+- Add `isActive` property to server Player class (separate from `isAlive`)
+- Modify `removePlayer()` in GameState to set `isActive: false` instead of deleting
+- Update `addPlayer()` to reactivate existing players and reset `roundKills` to 0
+- Filter inactive players from UI broadcasts and leaderboard display
+- Whoever has kills will get the round rewards
+- Maintain player data structure for potential reconnection within same round
 
-**Test**: Server calculates correct rewards (kills × reward rate) at round end for each player.
-### Step 2.5: Install Backend Web3 Dependencies
-**Objective**: Add server-side blockchain interaction capabilities.
+**Test**: Players can disconnect/reconnect seamlessly. Inactive players don't appear in UI but server maintains their data. Round kills preserved for reward distribution.
+
+### Step 2.3: Round Kill Tracking System
+
+**Objective**: Track kill counts for current round only (no lifetime tracking in Phase 2).
+
+**Actions**:
+- Add `roundKills` property to Player class (resets each round)
+- Modify missile hit processing to increment `roundKills` for current round
+- Reset all players' `roundKills` to 0 when new round starts
+- Use `roundKills` for reward calculations and leaderboard display
+- Remove any existing `score` updates (will be handled in Phase 3)
+- Display only current round performance in UI
+
+**Test**: Round kills track correctly for current round. All players start each round with 0 kills. Only round kills are displayed and used for rewards.
+
+### Step 2.4: Round Timer Broadcasting & UI
+
+**Objective**: Display synchronized round timer to all connected clients.
+
+**Actions**:
+- Include `remainingTime` and `roundNumber` in server gameState broadcasts
+- Add round timer display to client UI (MM:SS format)
+- Create visual countdown indicators for last 30 seconds
+- Show round status: "Waiting for players", "Round X in progress", "Round ended"
+- Handle timer synchronization across clients joining mid-round
+- Display round transition messages
+
+**Test**: All clients show synchronized timer. New players see correct remaining time when joining active round.
+
+### Step 2.5: Install Flow Testnet Web3 Dependencies
+
+**Objective**: Set up server-side blockchain integration for Flow testnet.
+
 **Actions**:
 - Navigate to `server/` directory
 - Install web3.js: `npm install web3`
+- Install Flow-specific dependencies: `npm install @onflow/fcl @onflow/types`
 - Install dotenv for environment variables: `npm install dotenv`
-- Create `.env` file in server directory
+- Create `.env` file in server directory with Flow testnet configuration
 - Add `.env` to `.gitignore` file
 
-**Test**: Backend dependencies install successfully. .env file exists and is gitignored.
-### Step 2.6: Create Backend Wallet Manager
-**Objective**: Set up server-side wallet for token distribution.
+**Test**: Backend dependencies install successfully. Flow testnet connection can be established.
+
+### Step 2.6: Configure Flow Testnet Integration
+
+**Objective**: Set up Flow testnet connection and treasury wallet.
+
 **Actions**:
 - Create `server/src/web3/` directory
-- Create `server/src/web3/WalletManager.js` file
-- Add treasury wallet private key to `.env` file (use Hardhat test account)
-- Implement wallet connection to local blockchain
-- Add method to get wallet balance and address
+- Create `server/src/web3/FlowManager.js` file for Flow blockchain connection
+- Add Flow testnet RPC URL and treasury wallet details to `.env`
+- Add SURR token contract address constant (updateable)
+- Implement Flow testnet connection initialization
+- Add method to verify treasury wallet balance
 
-**Test**: Server connects to blockchain using treasury wallet. Wallet address and balance are retrievable.
-### Step 2.7: Create Token Distribution Service
-**Objective**: Enable server to send tokens to players.
+**Test**: Server connects to Flow testnet successfully. Treasury wallet is accessible and balance is readable.
+
+### Step 2.7: Create Flow Token Minting Service
+
+**Objective**: Enable server to mint SURR tokens to player wallets on Flow testnet.
+
 **Actions**:
-- Create server/src/web3/RewardService.js file
-Import token contract ABI and address
-Implement distributeRewards(playerAddress, amount) method
-Add batch reward distribution for multiple players
-Include error handling for failed transactions
+- Create `server/src/web3/TokenMintService.js` file
+- Import SURR token contract interface and address constant
+- Implement `mintTokens(playerAddress, amount)` method using mint function
+- Add batch minting capability for multiple players
+- Include transaction error handling and retry logic
+- Log all minting transactions for debugging
 
-**Test**: Server can successfully send tokens from treasury wallet to test addresses.
-### Step 2.8: Integrate Reward Distribution with Round End
-**Objective**: Automatically distribute tokens when rounds end.
+**Test**: Server can successfully mint SURR tokens to test addresses on Flow testnet.
+
+### Step 2.8: Reward Calculation & Distribution System
+
+**Objective**: Calculate and distribute token rewards based on round kills only.
+
 **Actions**:
-- Import RewardService into GameState
-Add reward distribution call to round end logic
-Send tokens to each player based on their round kills
-Log successful and failed reward transactions
-Add player notification for received rewards
+- Define reward rate constant (e.g., 100 tokens per kill)
+- Add contract address constant (easily updateable for deployment)
+- Create `calculateRoundRewards()` method in GameState using `roundKills`
+- Integrate TokenMintService into round end processing
+- Distribute rewards only to players with `roundKills > 0`
+- Track successful/failed reward distributions
+- Add reward summary logging for each round
+- Clear all `roundKills` after reward distribution
 
-**Test**: Players receive tokens automatically when round ends. Token balances increase correctly based on kills.
-### Step 2.9: Add Reward Notifications to Client
-**Objective**: Show players when they receive token rewards.
+**Test**: Players receive correct token amounts (roundKills × reward rate) at round end. Round resets with all kills back to 0.
+
+### Step 2.9: Client Reward Notifications
+
+**Objective**: Display token reward notifications to players.
+
 **Actions**:
-- Add reward notification UI element
-Listen for reward events from server
-Display notification with token amount received
-Add visual effects for reward notifications
-Update client token balance display after rewards
+- Add reward notification UI component to client
+- Listen for `roundRewards` events from server
+- Display notification showing tokens earned for round kills
+- Add visual effects and animations for reward notifications
+- Show round kills and tokens earned (no lifetime stats)
+- Include link/reference to view transaction on Flow testnet explorer
+- Clear round performance display after notification
 
-**Test**: Players see notification when receiving rewards. Client shows updated token balance.
-### Step 2.10: Handle Join-in-Progress Players
-**Objective**: Allow players to join ongoing rounds seamlessly.
+**Test**: Players see attractive notifications when receiving tokens. Notifications show correct round kills and token amounts only.
+
+### Step 2.10: Round State Synchronization
+
+**Objective**: Ensure seamless player experience when joining ongoing rounds.
+
 **Actions**:
-- Update client to handle joining mid-round
-Show current round timer when joining in progress
-Initialize new player with zero round kills
-Add them to current round reward eligibility
-Update UI to indicate round is in progress
+- Send complete round state to new players on connection
+- Initialize joining players with `roundKills: 0` regardless of round progress
+- Allow players to earn rewards even if joining mid-round
+- Display appropriate UI state for round-in-progress vs waiting
+- Handle edge case of players joining during round transition
+- Ensure round rewards are distributed to all participants who earned kills
 
-**Test**: Player can join game while round is active. Timer shows correct remaining time and player can earn rewards.
+**Test**: Players joining mid-round see correct timer, start with 0 kills, and can earn rewards. UI clearly indicates round status.
+
+## Project Context Integration Notes
+
+### Current Architecture Overview
+- **Backend**: Node.js server using Socket.IO for real-time communication
+- **Frontend**: Vanilla JavaScript client with 3D game rendering
+- **Game State**: Function-based game state management in `server/src/game/GameState.js`
+- **Player Management**: Existing player object structure with wallet address support
+- **Networking**: Real-time position updates, weapon pickups, missile firing/hits
+- **Current Scoring**: `score` property exists but will be replaced with `roundKills` for Phase 2
+
+### Key Integration Points
+1. **Player State Management**: 
+   - Current `Player.js` already supports `walletAddress` property
+   - Need to add `roundKills` and `isActive` properties
+   - Existing validation functions can be extended
+   - Remove dependency on existing `score` property for Phase 2
+
+2. **Game State Broadcasting**: 
+   - Current `getGameStateForBroadcast()` function needs round timer info
+   - Existing tick system (20Hz) will handle round timer updates
+   - Filter inactive players in broadcast data
+   - Display only `roundKills` in game state
+
+3. **Leaderboard Integration**: 
+   - Current `Leaderboard.js` shows `score` and `isAlive` status
+   - Replace with `roundKills` display and round timer
+   - Show only current round performance (no lifetime stats)
+
+4. **Reward Distribution**: 
+   - Replace existing `awardPoints()` with round kill tracking
+   - Integrate reward distribution with round end logic
+   - Use wallet addresses from player objects for token minting
+   - Clear `roundKills` after each round completion
+
+### Flow Testnet Specific Details
+- **Chain**: Flow Testnet
+- **Token Standard**: ERC20-compatible (using current SurrToken.sol)
+- **Minting Function**: `mint(address to, uint256 amount)` from existing contract
+- **Treasury Management**: Server wallet with MINTER_ROLE for automated distribution
+- **Transaction Monitoring**: Log all mint transactions for tracking and debugging
+
+### Configuration Constants
+```javascript
+// Example configuration for easy updates
+const FLOW_CONFIG = {
+  TESTNET_RPC: 'https://rest-testnet.onflow.org',
+  SURR_TOKEN_ADDRESS: '0x...', // Updateable constant
+  REWARD_RATE: 100, // Tokens per kill
+  ROUND_DURATION: 180000, // 3 minutes in milliseconds
+  MIN_PLAYERS_FOR_ROUND: 1 // Start round with first player
+};
+```
 ## Phase 3: Lifetime Kills Contract
 ### Step 3.1: Create Lifetime Kills Smart Contract
 **Objective**: Deploy contract to track permanent player statistics.
