@@ -185,7 +185,7 @@ processInput.lastLogTime = 0;
 // Step 6.3: Weapon pickup collection state to prevent spam
 let lastCollectedPickupId = null;
 let lastCollectionTime = 0;
-const COLLECTION_COOLDOWN = 500; // 500ms cooldown between collections
+const COLLECTION_COOLDOWN = 0; // 500ms cooldown between collections
 
 // Step 7.2: Missile firing state to prevent spam
 let lastFireTime = 0;
