@@ -2,6 +2,8 @@
 // This file initializes the game and starts the main game loop
 
 import { initGameEngine, setupVisibilityHandling } from './game/GameEngine.js';
+import { testInterpolation } from './tests/interpolation-test.js';
+import { testJoinLeave } from './tests/join-leave-test.js';
 
 console.log('Surr Game - Client Starting...');
 
