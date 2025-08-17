@@ -17,6 +17,7 @@ import { modelLoader } from '../utils/ModelLoader.js';
  * - NAME_TAG_HEIGHT should be roughly 2-3x the car's height for good visibility
  * - ARENA_BOUNDARY should be smaller than the actual arena size to prevent wall clipping
  * - Colors use hexadecimal format (0x...) for Three.js materials
+ * - FRONT_WHEEL settings control the realistic steering behavior of front wheels
  */
 const CAR_CONFIG = {
   // Model settings
@@ -47,7 +48,30 @@ const CAR_CONFIG = {
   FALLBACK_BOX_SIZE: { width: 2, height: 1, depth: 3 },
   
   // Name tag settings
-  NAME_TAG_SCALE: { x: 4, y: 1, z: 1 }
+  NAME_TAG_SCALE: { x: 4, y: 1, z: 1 },
+  
+  // Front wheel steering settings
+  FRONT_WHEEL: {
+    // Common names for front wheels in GLB models
+    POSSIBLE_NAMES: [
+      'wheel', 'Wheel', 'WHEEL',
+      'tire', 'Tire', 'TIRE', 
+      'rim', 'Rim', 'RIM',
+      'front_wheel', 'front_tire',
+      'wheel_f', 'wheel_front',
+      'wheelF', 'wheelFront',
+      'wheel_fl', 'wheel_fr', // front-left, front-right
+      'wheelFL', 'wheelFR'
+    ],
+    // Steering settings
+    MAX_STEERING_ANGLE: Math.PI / 6, // 30 degrees max steering
+    STEERING_SPEED: 8.0, // How fast wheels turn when steering
+    // Position threshold to identify front wheels
+    // 'auto' = auto-detect based on model orientation
+    // 'low' = assume front wheels have lower Z coordinates
+    // 'high' = assume front wheels have higher Z coordinates
+    FRONT_THRESHOLD: 'auto'
+  }
 };
 
 // Player class for client-side player management
@@ -93,6 +117,10 @@ export class Player {
     this.weaponMesh = null;
     this.carModel = null; // Store the loaded car model
     
+    // Front wheel steering
+    this.frontWheels = []; // Array of front wheel objects
+    this.steeringAngle = 0; // Current steering angle
+    
     // Initialize visual representation
     // Note: createMesh() is now called asynchronously in PlayerManager.createPlayer()
     this.createNameTag();
@@ -134,6 +162,9 @@ export class Player {
       
       console.log(`🚗 Car bounding box - Size: ${boxSize.x.toFixed(2)} x ${boxSize.y.toFixed(2)} x ${boxSize.z.toFixed(2)}`);
       console.log(`🚗 Car position adjustment: y = ${(-box.min.y).toFixed(2)}`);
+      
+      // Find and setup front wheels for steering
+      this.findFrontWheels(carModel.scene);
       
       // Position and rotation
       this.mesh.position.copy(this.position);
@@ -191,6 +222,158 @@ export class Player {
     addObjectToScene(this.mesh);
     
     console.log(`Fallback box mesh created for player: ${this.name}`);
+  }
+  
+  // Find front wheels in the car model for steering
+  findFrontWheels(carScene) {
+    console.log(`🛞 Searching for front wheels in car model for player: ${this.name}`);
+    
+    // Reset front wheels array
+    this.frontWheels = [];
+    
+    // First, find ALL wheels and their positions
+    const allWheels = [];
+    carScene.traverse((node) => {
+      if (node.isMesh || node.isGroup) {
+        const nodeName = node.name.toLowerCase();
+        
+        // Check if this node is a wheel based on common naming patterns
+        const isWheel = CAR_CONFIG.FRONT_WHEEL.POSSIBLE_NAMES.some(wheelName => 
+          nodeName.includes(wheelName.toLowerCase())
+        );
+        
+        if (isWheel) {
+          allWheels.push(node);
+          console.log(`🛞 Found wheel: ${node.name} at position (${node.position.x.toFixed(2)}, ${node.position.y.toFixed(2)}, ${node.position.z.toFixed(2)})`);
+        }
+      }
+    });
+    
+    if (allWheels.length === 0) {
+      console.log(`⚠️ No wheels found by name, trying geometry-based detection...`);
+      this.findFrontWheelsByPosition(carScene);
+      return;
+    }
+    
+    // Determine which direction is "front" by analyzing wheel positions
+    // The car is rotated 180 degrees (Math.PI), so we need to account for this
+    const zPositions = allWheels.map(wheel => wheel.position.z);
+    const minZ = Math.min(...zPositions);
+    const maxZ = Math.max(...zPositions);
+    const centerZ = (minZ + maxZ) / 2;
+    
+    console.log(`🛞 Wheel Z positions: min=${minZ.toFixed(2)}, max=${maxZ.toFixed(2)}, center=${centerZ.toFixed(2)}`);
+    
+    // Since the car is rotated 180 degrees, the "front" in model space 
+    // might be at the higher Z values. Let's check both possibilities.
+    let frontCandidatesHigh = allWheels.filter(wheel => wheel.position.z > centerZ);
+    let frontCandidatesLow = allWheels.filter(wheel => wheel.position.z < centerZ);
+    
+    // If we have specific front wheel naming patterns, use those to determine orientation
+    const hasExplicitFrontNames = allWheels.some(wheel => {
+      const name = wheel.name.toLowerCase();
+      return name.includes('front') || name.includes('_f') || name.includes('fl') || name.includes('fr');
+    });
+    
+    if (hasExplicitFrontNames) {
+      // Use explicit naming to identify front wheels
+      this.frontWheels = allWheels.filter(wheel => {
+        const name = wheel.name.toLowerCase();
+        return name.includes('front') || name.includes('_f') || name.includes('fl') || name.includes('fr');
+      });
+      console.log(`🛞 Using explicit front wheel naming`);
+    } else {
+      // Handle manual threshold overrides
+      if (CAR_CONFIG.FRONT_WHEEL.FRONT_THRESHOLD === 'low') {
+        this.frontWheels = frontCandidatesLow;
+        console.log(`🛞 Manual override: using LOW Z position wheels as front`);
+      } else if (CAR_CONFIG.FRONT_WHEEL.FRONT_THRESHOLD === 'high') {
+        this.frontWheels = frontCandidatesHigh;
+        console.log(`🛞 Manual override: using HIGH Z position wheels as front`);
+      } else {
+        // Auto-detection logic
+        // For race.glb, let's assume front wheels are at higher Z (since car is rotated 180°)
+        // But let's be smart about it - typically there are 2 front wheels and 2 rear wheels
+        if (frontCandidatesHigh.length === 2 && frontCandidatesLow.length === 2) {
+          this.frontWheels = frontCandidatesHigh; // Try higher Z first
+          console.log(`🛞 Auto-detection: front wheels at higher Z positions (accounting for 180° rotation)`);
+        } else if (frontCandidatesLow.length === 2 && frontCandidatesHigh.length === 2) {
+          this.frontWheels = frontCandidatesLow; // Fallback to lower Z
+          console.log(`🛞 Auto-detection: front wheels at lower Z positions`);
+        } else {
+          // If wheel count doesn't match expected, take the ones closer to the maximum Z
+          this.frontWheels = frontCandidatesHigh.length > 0 ? frontCandidatesHigh : frontCandidatesLow;
+          console.log(`🛞 Auto-detection: using position-based fallback (irregular wheel count)`);
+        }
+      }
+    }
+    
+    this.frontWheels.forEach(wheel => {
+      console.log(`  ✅ Selected as FRONT wheel: ${wheel.name} at z=${wheel.position.z.toFixed(2)}`);
+    });
+    
+    console.log(`🛞 Front wheel detection complete: ${this.frontWheels.length} front wheels found`);
+    
+    // If still no front wheels found, try alternative detection
+    if (this.frontWheels.length === 0) {
+      console.log(`⚠️ No front wheels identified, trying fallback detection...`);
+      this.findFrontWheelsByPosition(carScene);
+    }
+  }
+  
+  // Alternative front wheel detection by position (fallback method)
+  findFrontWheelsByPosition(carScene) {
+    const potentialWheels = [];
+    
+    carScene.traverse((node) => {
+      if (node.isMesh && node.geometry) {
+        // Look for objects that could be wheels based on geometry
+        const boundingBox = new THREE.Box3().setFromObject(node);
+        const size = boundingBox.getSize(new THREE.Vector3());
+        
+        // Check if object has wheel-like proportions
+        const aspectRatio = size.x / size.z;
+        const heightRatio = size.y / Math.max(size.x, size.z);
+        
+        // Likely a wheel if roughly circular and not too tall
+        if (aspectRatio > 0.5 && aspectRatio < 2.0 && heightRatio < 0.8 && size.x > 0.1) {
+          potentialWheels.push({ node, z: node.position.z });
+          console.log(`🛞 Found potential wheel by geometry: ${node.name || 'unnamed'} at z=${node.position.z.toFixed(2)}`);
+        }
+      }
+    });
+    
+    if (potentialWheels.length >= 2) {
+      // Sort by Z position and take the front ones
+      potentialWheels.sort((a, b) => b.z - a.z); // Sort high to low Z
+      
+      // Take the front half (assuming 4 wheels total, take front 2)
+      const frontCount = Math.min(2, Math.ceil(potentialWheels.length / 2));
+      this.frontWheels = potentialWheels.slice(0, frontCount).map(wheel => wheel.node);
+      
+      console.log(`🛞 Position-based detection selected front wheels at Z positions: ${this.frontWheels.map(w => w.position.z.toFixed(2)).join(', ')}`);
+    }
+    
+    console.log(`🛞 Position-based detection found: ${this.frontWheels.length} front wheels`);
+  }
+  
+  // Update front wheel steering based on input
+  updateFrontWheelSteering(inputState, deltaTime) {
+    if (this.frontWheels.length === 0) return;
+    
+    // Calculate target steering angle based on input
+    let targetSteeringAngle = 0;
+    if (inputState.left) targetSteeringAngle = CAR_CONFIG.FRONT_WHEEL.MAX_STEERING_ANGLE;
+    if (inputState.right) targetSteeringAngle = -CAR_CONFIG.FRONT_WHEEL.MAX_STEERING_ANGLE;
+    
+    // Smooth steering transition
+    const steeringDiff = targetSteeringAngle - this.steeringAngle;
+    this.steeringAngle += Math.sign(steeringDiff) * Math.min(Math.abs(steeringDiff), CAR_CONFIG.FRONT_WHEEL.STEERING_SPEED * deltaTime);
+    
+    // Apply steering angle to front wheels
+    this.frontWheels.forEach(wheel => {
+      wheel.rotation.y = this.steeringAngle;
+    });
   }
   
   // Create name tag above player
@@ -465,6 +648,9 @@ export class Player {
       this.nameTag.position.copy(this.position);
       this.nameTag.position.y += CAR_CONFIG.NAME_TAG_HEIGHT;
     }
+    
+    // Update front wheel steering for realistic movement
+    this.updateFrontWheelSteering(inputState, deltaTime);
   }
   
   // Update weapon state
@@ -652,6 +838,10 @@ export class Player {
       
       this.mesh = null;
     }
+    
+    // Clear front wheel references
+    this.frontWheels = [];
+    this.steeringAngle = 0;
     
     if (this.nameTag) {
       removeObjectFromScene(this.nameTag);
@@ -909,6 +1099,38 @@ export function createScaledCarConfig(newScale) {
       x: CAR_CONFIG.MISSILE_SPAWN_OFFSET.x * scaleFactor,
       y: CAR_CONFIG.MISSILE_SPAWN_OFFSET.y * scaleFactor,
       z: CAR_CONFIG.MISSILE_SPAWN_OFFSET.z * scaleFactor
+    },
+    FRONT_WHEEL: {
+      ...CAR_CONFIG.FRONT_WHEEL,
+      // Note: FRONT_THRESHOLD is string-based ('auto', 'high', 'low'), so no scaling needed
+      FRONT_THRESHOLD: CAR_CONFIG.FRONT_WHEEL.FRONT_THRESHOLD
     }
+  };
+}
+
+// Debug function to switch front wheel detection for testing
+// Usage in browser console: switchWheelDetection('low') or switchWheelDetection('high')
+if (typeof window !== 'undefined') {
+  window.switchWheelDetection = function(mode = 'auto') {
+    if (!['auto', 'high', 'low'].includes(mode)) {
+      console.log('❌ Invalid mode. Use: "auto", "high", or "low"');
+      return;
+    }
+    
+    // Update the configuration
+    CAR_CONFIG.FRONT_WHEEL.FRONT_THRESHOLD = mode;
+    console.log(`🛞 Switched front wheel detection to: ${mode}`);
+    
+    // Re-detect wheels for all players
+    playerManager.getAllPlayers().forEach(player => {
+      if (player.carModel) {
+        console.log(`🔄 Re-detecting wheels for player: ${player.name}`);
+        player.findFrontWheels(player.carModel.scene);
+      }
+    });
+    
+    console.log('🛞 Wheel re-detection complete. Try steering to see the change!');
+    console.log('💡 If wheels still don\'t look right, try the other mode: switchWheelDetection(\'' + 
+                (mode === 'low' ? 'high' : 'low') + '\')');
   };
 }

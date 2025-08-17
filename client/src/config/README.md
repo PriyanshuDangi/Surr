@@ -32,6 +32,27 @@ ACCELERATION: 25,   // How fast cars accelerate
 TURN_SPEED: 3.5,    // How fast cars turn
 ```
 
+### Configure Front Wheel Steering
+```javascript
+// In Player.js, modify:
+FRONT_WHEEL: {
+  MAX_STEERING_ANGLE: Math.PI / 6,  // 30 degrees max steering
+  STEERING_SPEED: 8.0,              // How fast wheels turn when steering
+  FRONT_THRESHOLD: 'auto',          // 'auto', 'high', or 'low'
+}
+```
+
+### Fix Wrong Wheel Detection
+If the wrong wheels are turning (back instead of front):
+
+```javascript
+// Try this first:
+FRONT_THRESHOLD: 'low',  // Use wheels at lower Z coordinates as front
+
+// If that doesn't work:
+FRONT_THRESHOLD: 'high', // Use wheels at higher Z coordinates as front
+```
+
 ## Advanced Usage
 
 ### Using the Scaling Helper Function
@@ -66,5 +87,8 @@ const bigCarConfig = createScaledCarConfig(3.0);
 | `MAX_SPEED` | Maximum movement speed | `15` |
 | `LOCAL_PLAYER_COLOR` | Color for local player | `0x4CAF50` (Green) |
 | `REMOTE_PLAYER_COLOR` | Color for remote players | `0xFF5722` (Orange) |
+| `FRONT_WHEEL.MAX_STEERING_ANGLE` | Maximum steering angle | `Math.PI / 6` (30°) |
+| `FRONT_WHEEL.STEERING_SPEED` | Front wheel turning speed | `8.0` |
+| `FRONT_WHEEL.FRONT_THRESHOLD` | Front wheel detection mode | `'auto'` |
 
 For a complete list of all properties, see the `CAR_CONFIG` object in `src/game/Player.js`.

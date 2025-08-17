@@ -79,7 +79,7 @@
 ## 4. Game Assets
 
 ### 3D Models:
-- **car.glb:** A low-poly, stylized racing kart (reference implementation from Sketchbook project)
+- **car.glb:** A low-poly, stylized racing kart 
 - **Arena:** Simple 100x100 unit flat ground plane with visible boundary walls
 - **Missiles:** Generated procedurally using simple geometry
 - **Weapon Pickups:** Simple box geometry at predefined locations 
@@ -132,7 +132,7 @@
 - **Send player position updates to the server** only when position, rotation, or state changes.
 - Receive game state updates from the server and interpolate positions to smooth out movement.
 - Handle client-side collision detection for missiles and kart-to-kart collisions.
-- Reference car physics implementation from Sketchbook project.
+- Reference car physics implementation from projects.
 - Display the UI, including the real-time leaderboard updates.
 
 **Socket Events (Client listening for):**
