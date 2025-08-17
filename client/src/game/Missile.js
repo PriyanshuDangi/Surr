@@ -10,7 +10,7 @@ let missiles = new Map();
 let nextMissileId = 1;
 
 // Missile configuration
-const MISSILE_SPEED = 25; // units per second
+const MISSILE_SPEED = 60; // units per second
 const MISSILE_LIFETIME = 5000; // 5 seconds in milliseconds
 const MISSILE_LENGTH = 1.5;
 const MISSILE_RADIUS = 0.1;
