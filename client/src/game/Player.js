@@ -37,7 +37,7 @@ const CAR_CONFIG = {
   TURN_SPEED: 3.5,
   
   // Weapon settings
-  WEAPON_POSITION: { x: 0, y: 1.5, z: -3.0 },
+  WEAPON_POSITION: { x: 0, y: 1.0, z: -3.0 },
   MISSILE_SPAWN_OFFSET: { x: 0, y: 1.5, z: -3.5 },
   
   // Colors
