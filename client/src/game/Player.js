@@ -71,6 +71,54 @@ const CAR_CONFIG = {
     // 'low' = assume front wheels have lower Z coordinates
     // 'high' = assume front wheels have higher Z coordinates
     FRONT_THRESHOLD: 'auto'
+  },
+  
+  // Race car part coloring system
+  RACE_CAR_PARTS: {
+    // Tire/wheel coloring
+    TIRES: {
+      NAMES: ['tire', 'tyre', 'wheel', 'rim'], // Common tire names
+      COLOR: 0x000000, // Pure black for tires
+      MATERIAL_TYPE: 'matte' // Matte finish for tires
+    },
+    
+    // Car body parts
+    BODY: {
+      NAMES: ['body', 'chassis', 'hull', 'frame', 'car', 'vehicle'],
+      LOCAL_COLOR: 0xFF5722,  // Bright orange for local player body
+      REMOTE_COLOR: 0xFF7043, // Lighter orange for remote player body
+      MATERIAL_TYPE: 'metallic' // Metallic finish for body
+    },
+    
+    // Wing/spoiler parts
+    WINGS: {
+      NAMES: ['wing', 'spoiler', 'aero', 'fin'],
+      LOCAL_COLOR: 0xE64A19,  // Darker orange for local player wings
+      REMOTE_COLOR: 0xFF5722, // Bright orange for remote player wings
+      MATERIAL_TYPE: 'metallic'
+    },
+    
+    // Detail parts (bumpers, mirrors, etc.)
+    DETAILS: {
+      NAMES: ['bumper', 'mirror', 'light', 'headlight', 'taillight', 'detail'],
+      COLOR: 0x424242, // Dark gray for details
+      MATERIAL_TYPE: 'plastic'
+    },
+    
+    // Window/glass parts
+    GLASS: {
+      NAMES: ['window', 'windshield', 'glass', 'windscreen'],
+      COLOR: 0x616161, // Medium grey for windows
+      MATERIAL_TYPE: 'glass',
+      OPACITY: 0.8 // Semi-transparent
+    },
+    
+    // Default fallback for unidentified parts
+    DEFAULT: {
+      LOCAL_COLOR: 0x4CAF50,  // Standard green
+      REMOTE_COLOR: 0xFF5722, // Standard orange
+      MATERIAL_TYPE: 'standard'
+    }
   }
 };
 
@@ -144,9 +192,8 @@ export class Player {
       // Set appropriate scale for the car model
       modelLoader.setModelScale(carModel, CAR_CONFIG.SCALE);
       
-      // Set color based on player type
-      const carColor = this.isLocal ? CAR_CONFIG.LOCAL_PLAYER_COLOR : CAR_CONFIG.REMOTE_PLAYER_COLOR;
-      modelLoader.setModelColor(carModel, carColor);
+      // Apply realistic race car colors to different parts
+      modelLoader.setRaceCarColors(carModel, this.isLocal, CAR_CONFIG.RACE_CAR_PARTS);
       
       // Rotate the model if needed (some GLB models face different directions)
       carModel.scene.rotation.y = CAR_CONFIG.ROTATION_Y;
@@ -392,8 +439,11 @@ export class Player {
     context.fillStyle = 'rgba(0, 0, 0, 0.8)';
     context.fillRect(0, 0, canvas.width, canvas.height);
     
-    // Draw border
-    context.strokeStyle = this.isLocal ? '#4CAF50' : '#FF5722';
+    // Draw border using car body colors
+    const borderColor = this.isLocal ? 
+      `#${CAR_CONFIG.RACE_CAR_PARTS.BODY.LOCAL_COLOR.toString(16).padStart(6, '0')}` : 
+      `#${CAR_CONFIG.RACE_CAR_PARTS.BODY.REMOTE_COLOR.toString(16).padStart(6, '0')}`;
+    context.strokeStyle = borderColor;
     context.lineWidth = 2;
     context.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
     
@@ -1132,5 +1182,30 @@ if (typeof window !== 'undefined') {
     console.log('🛞 Wheel re-detection complete. Try steering to see the change!');
     console.log('💡 If wheels still don\'t look right, try the other mode: switchWheelDetection(\'' + 
                 (mode === 'low' ? 'high' : 'low') + '\')');
+  };
+
+  // Debug function to show car part coloring breakdown
+  window.showCarPartColors = function() {
+    console.log('🎨 Race Car Part Color Scheme:');
+    console.log('🛞 TIRES:', `#${CAR_CONFIG.RACE_CAR_PARTS.TIRES.COLOR.toString(16).padStart(6, '0')}`, `(${CAR_CONFIG.RACE_CAR_PARTS.TIRES.MATERIAL_TYPE})`);
+    console.log('🚗 BODY (Local):', `#${CAR_CONFIG.RACE_CAR_PARTS.BODY.LOCAL_COLOR.toString(16).padStart(6, '0')}`, `(${CAR_CONFIG.RACE_CAR_PARTS.BODY.MATERIAL_TYPE})`);
+    console.log('🚗 BODY (Remote):', `#${CAR_CONFIG.RACE_CAR_PARTS.BODY.REMOTE_COLOR.toString(16).padStart(6, '0')}`, `(${CAR_CONFIG.RACE_CAR_PARTS.BODY.MATERIAL_TYPE})`);
+    console.log('🪶 WINGS (Local):', `#${CAR_CONFIG.RACE_CAR_PARTS.WINGS.LOCAL_COLOR.toString(16).padStart(6, '0')}`, `(${CAR_CONFIG.RACE_CAR_PARTS.WINGS.MATERIAL_TYPE})`);
+    console.log('🪶 WINGS (Remote):', `#${CAR_CONFIG.RACE_CAR_PARTS.WINGS.REMOTE_COLOR.toString(16).padStart(6, '0')}`, `(${CAR_CONFIG.RACE_CAR_PARTS.WINGS.MATERIAL_TYPE})`);
+    console.log('🔧 DETAILS:', `#${CAR_CONFIG.RACE_CAR_PARTS.DETAILS.COLOR.toString(16).padStart(6, '0')}`, `(${CAR_CONFIG.RACE_CAR_PARTS.DETAILS.MATERIAL_TYPE})`);
+    console.log('🪟 GLASS:', `#${CAR_CONFIG.RACE_CAR_PARTS.GLASS.COLOR.toString(16).padStart(6, '0')}`, `(${CAR_CONFIG.RACE_CAR_PARTS.GLASS.MATERIAL_TYPE}, ${CAR_CONFIG.RACE_CAR_PARTS.GLASS.OPACITY * 100}% opacity)`);
+  };
+
+  // Debug function to recolor all cars (useful for testing)
+  window.recolorAllCars = function() {
+    console.log('🎨 Recoloring all cars...');
+    playerManager.getAllPlayers().forEach(player => {
+      if (player.carModel) {
+        console.log(`🔄 Recoloring car for player: ${player.name}`);
+        modelLoader.setRaceCarColors(player.carModel, player.isLocal, CAR_CONFIG.RACE_CAR_PARTS);
+        player.updateNameTagTexture(); // Update name tag color too
+      }
+    });
+    console.log('✅ All cars recolored successfully!');
   };
 }

@@ -81,7 +81,7 @@ class ModelLoader {
     };
   }
 
-  // Set material color for a model
+  // Set material color for a model (simple single-color approach)
   setModelColor(model, color) {
     if (!model || !model.scene) return;
     
@@ -99,6 +99,158 @@ class ModelLoader {
           }
         }
       }
+    });
+  }
+
+  // Advanced race car coloring system - colors different parts differently
+  setRaceCarColors(model, isLocal, partConfig) {
+    if (!model || !model.scene) return;
+    
+    console.log(`🎨 Applying race car colors for ${isLocal ? 'local' : 'remote'} player`);
+    
+    let coloredParts = {
+      tires: 0,
+      body: 0,
+      wings: 0,
+      details: 0,
+      glass: 0,
+      other: 0
+    };
+    
+    model.scene.traverse((node) => {
+      if (node.isMesh && node.material) {
+        const nodeName = node.name.toLowerCase();
+        const partInfo = this.identifyCarPart(nodeName, partConfig);
+        
+        console.log(`🔧 Processing part: "${node.name}" → ${partInfo.type}`);
+        
+        // Apply appropriate material and color based on part type
+        this.applyCarPartMaterial(node, partInfo, isLocal);
+        
+        // Count colored parts for debugging
+        coloredParts[partInfo.type]++;
+      }
+    });
+    
+    console.log('🎨 Colored parts summary:', coloredParts);
+  }
+  
+  // Identify what type of car part a mesh represents
+  identifyCarPart(nodeName, partConfig) {
+    // Check tires/wheels first (most specific)
+    if (partConfig.TIRES.NAMES.some(name => nodeName.includes(name.toLowerCase()))) {
+      return {
+        type: 'tires',
+        config: partConfig.TIRES,
+        color: partConfig.TIRES.COLOR,
+        materialType: partConfig.TIRES.MATERIAL_TYPE
+      };
+    }
+    
+    // Check wings/spoilers
+    if (partConfig.WINGS.NAMES.some(name => nodeName.includes(name.toLowerCase()))) {
+      return {
+        type: 'wings',
+        config: partConfig.WINGS,
+        materialType: partConfig.WINGS.MATERIAL_TYPE
+      };
+    }
+    
+    // Check glass parts
+    if (partConfig.GLASS.NAMES.some(name => nodeName.includes(name.toLowerCase()))) {
+      return {
+        type: 'glass',
+        config: partConfig.GLASS,
+        color: partConfig.GLASS.COLOR,
+        materialType: partConfig.GLASS.MATERIAL_TYPE,
+        opacity: partConfig.GLASS.OPACITY
+      };
+    }
+    
+    // Check detail parts
+    if (partConfig.DETAILS.NAMES.some(name => nodeName.includes(name.toLowerCase()))) {
+      return {
+        type: 'details',
+        config: partConfig.DETAILS,
+        color: partConfig.DETAILS.COLOR,
+        materialType: partConfig.DETAILS.MATERIAL_TYPE
+      };
+    }
+    
+    // Check body parts
+    if (partConfig.BODY.NAMES.some(name => nodeName.includes(name.toLowerCase()))) {
+      return {
+        type: 'body',
+        config: partConfig.BODY,
+        materialType: partConfig.BODY.MATERIAL_TYPE
+      };
+    }
+    
+    // Default fallback
+    return {
+      type: 'other',
+      config: partConfig.DEFAULT,
+      materialType: partConfig.DEFAULT.MATERIAL_TYPE
+    };
+  }
+  
+  // Apply appropriate material and coloring to a car part
+  applyCarPartMaterial(node, partInfo, isLocal) {
+    const materials = Array.isArray(node.material) ? node.material : [node.material];
+    
+    materials.forEach(material => {
+      // Determine the color to use
+      let color;
+      if (partInfo.color !== undefined) {
+        // Fixed color (like tires, details, glass)
+        color = partInfo.color;
+      } else if (partInfo.config.LOCAL_COLOR !== undefined) {
+        // Team-based color (like body, wings)
+        color = isLocal ? partInfo.config.LOCAL_COLOR : partInfo.config.REMOTE_COLOR;
+      } else {
+        // Fallback to default team colors
+        color = isLocal ? partInfo.config.LOCAL_COLOR || 0x4CAF50 : partInfo.config.REMOTE_COLOR || 0xFF5722;
+      }
+      
+      // Apply the color
+      if (material.color) {
+        material.color.setHex(color);
+      }
+      
+      // Apply material properties based on type
+      switch (partInfo.materialType) {
+        case 'metallic':
+          if (material.metalness !== undefined) material.metalness = 0.7;
+          if (material.roughness !== undefined) material.roughness = 0.2;
+          break;
+          
+        case 'matte':
+          if (material.metalness !== undefined) material.metalness = 0.0;
+          if (material.roughness !== undefined) material.roughness = 0.9;
+          break;
+          
+        case 'plastic':
+          if (material.metalness !== undefined) material.metalness = 0.0;
+          if (material.roughness !== undefined) material.roughness = 0.6;
+          break;
+          
+        case 'glass':
+          if (material.metalness !== undefined) material.metalness = 0.0;
+          if (material.roughness !== undefined) material.roughness = 0.0;
+          if (material.transparent !== undefined) {
+            material.transparent = true;
+            material.opacity = partInfo.opacity || 0.8;
+          }
+          break;
+          
+        default: // 'standard'
+          if (material.metalness !== undefined) material.metalness = 0.3;
+          if (material.roughness !== undefined) material.roughness = 0.5;
+          break;
+      }
+      
+      // Ensure the material updates
+      material.needsUpdate = true;
     });
   }
 
