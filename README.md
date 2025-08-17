@@ -2,7 +2,10 @@
 
 ![Surr Logo](./Images/logo.jpeg)
 
-**Surr** is a fast-paced, Web3-enabled multiplayer arena kart game where players compete in real-time battles, collect weapon pickups, eliminate opponents, and earn cryptocurrency rewards. Built with modern web technologies and blockchain integration, Surr combines traditional gaming excitement with decentralized rewards.
+**Surr** is a fast-paced, Web3-enabled multiplayer arena kart game where players compete in real-time battles, collect weapon pickups, eliminate opponents, and earn cryptocurrency rewards. It is powered by Flow Blockchain. Built with modern web technologies and blockchain integration, Surr combines traditional gaming excitement with decentralized rewards.
+
+**FlowScan Contract:**  
+[https://evm-testnet.flowscan.io/token/0xDE8c68317AB8699A37E208Ef6EE7Ef8E173707E1](https://evm-testnet.flowscan.io/token/0xDE8c68317AB8699A37E208Ef6EE7Ef8E173707E1)
 
 ## 🎮 Game Overview
 
