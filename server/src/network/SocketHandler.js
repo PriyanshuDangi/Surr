@@ -298,7 +298,7 @@ function handleJoinGame(socket, data) {
 
 // Step 5.1: Handle optimized player position updates
 function handlePlayerPosition(socket, data) {
-  console.log('handlePlayerPosition', data);
+  // console.log('handlePlayerPosition', data);
   
   // Get the actual player ID (wallet address if Web3 player, socket.id otherwise)
   const clientInfo = connectedClients.get(socket.id);
