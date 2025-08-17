@@ -77,6 +77,11 @@ export function addPlayer(playerId, playerName, walletAddress = null) {
     // Create new player - always start with score 0, regardless of round state
     const player = createPlayer(playerId, playerName, walletAddress);
     player.score = 0; // Explicitly ensure new players start with 0 score
+    
+    // Set random spawn position for new player
+    const spawnPosition = findSafeRandomSpawnPosition(playerId);
+    player.position = spawnPosition;
+    
     players.set(playerId, player);
     isNewPlayer = true;
     
@@ -544,6 +549,71 @@ export function validateRoundKillSystem() {
     issues,
     summary: getPlayerStateSummary()
   };
+}
+
+// Random Spawn Position Functions
+
+/**
+ * Generate a random spawn position within arena bounds
+ * @returns {Object} Position object with x, y, z coordinates
+ */
+function generateRandomSpawnPosition() {
+  const arenaSize = 40; // Arena size (40x40)
+  const halfSize = arenaSize / 2;
+  
+  // Generate completely random position within arena bounds
+  const x = Math.random() * arenaSize - halfSize; // Random between -20 and 20
+  const z = Math.random() * arenaSize - halfSize; // Random between -20 and 20
+  const y = 1; // Fixed height for ground level
+  
+  return { x, y, z };
+}
+
+/**
+ * Check if spawn position is safe (not occupied by another player)
+ * @param {Object} position - Position to check
+ * @param {string} playerId - ID of player to exclude from check
+ * @returns {boolean} True if position is safe
+ */
+function isSpawnPositionSafe(position, playerId) {
+  const safeDistance = 5; // Minimum distance from other players
+  
+  // Get all other alive players
+  const otherPlayers = getAllPlayers().filter(p => p.id !== playerId && p.isAlive && p.isActive);
+  
+  // Check distance from each other player
+  for (const player of otherPlayers) {
+    const distance = Math.sqrt(
+      Math.pow(position.x - player.position.x, 2) +
+      Math.pow(position.z - player.position.z, 2)
+    );
+    
+    if (distance < safeDistance) {
+      return false;
+    }
+  }
+  
+  return true;
+}
+
+/**
+ * Find a safe random spawn position for a player
+ * @param {string} playerId - ID of player to spawn
+ * @param {number} maxAttempts - Maximum attempts to find safe position
+ * @returns {Object} Safe spawn position
+ */
+function findSafeRandomSpawnPosition(playerId, maxAttempts = 20) {
+  for (let i = 0; i < maxAttempts; i++) {
+    const position = generateRandomSpawnPosition();
+    if (isSpawnPositionSafe(position, playerId)) {
+      console.log(`Found safe spawn position for new player ${playerId} at (${position.x.toFixed(1)}, ${position.z.toFixed(1)}) after ${i + 1} attempts`);
+      return position;
+    }
+  }
+  
+  // If no safe position found, use center as fallback
+  console.log(`Warning: Could not find safe spawn position for new player ${playerId} after ${maxAttempts} attempts, using center`);
+  return { x: 0, y: 1, z: 0 };
 }
 
 // Reward Distribution System Functions

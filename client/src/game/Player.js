@@ -566,6 +566,29 @@ export class Player {
       timestamp: currentTime
     };
     
+    // If this is the first position update for this remote player, apply immediately
+    // to prevent visual flicker from spawning at (0,0,0) then interpolating to correct position
+    if (this.interpolationBuffer.length === 0) {
+      console.log(`🎯 Applying initial position for remote player ${this.name} at (${position.x.toFixed(1)}, ${position.z.toFixed(1)})`);
+      this.position.set(position.x, position.y, position.z);
+      this.rotation.set(rotation.x, rotation.y, rotation.z);
+      
+      // Update mesh position immediately
+      if (this.mesh) {
+        this.mesh.position.copy(this.position);
+        this.mesh.rotation.copy(this.rotation);
+      }
+      
+      // Update name tag position
+      if (this.nameTag) {
+        this.nameTag.position.copy(this.position);
+        this.nameTag.position.y += CAR_CONFIG.NAME_TAG_HEIGHT;
+      }
+      
+      // Update weapon position
+      this.updateWeaponPosition();
+    }
+    
     // Add to buffer
     this.interpolationBuffer.push(update);
     this.lastUpdateTime = currentTime;

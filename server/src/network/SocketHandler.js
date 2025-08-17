@@ -474,23 +474,17 @@ function handleMissileHitEvent(socket, data) {
   console.log(`🎯 Player ${targetId} eliminated by ${shooterId}. Respawning in 5 seconds.`);
 }
 
-// Step 8.2: Generate random spawn position
+// Step 8.2: Generate random spawn position anywhere in arena
 function generateRandomSpawnPosition() {
-  const arenaSize = 40; // Slightly smaller than full arena to avoid spawning too close to edges
-  const spawnPositions = [
-    { x: 0, y: 1, z: 0 },           // Center
-    { x: 15, y: 1, z: 15 },         // Northeast
-    { x: -15, y: 1, z: 15 },        // Northwest  
-    { x: 15, y: 1, z: -15 },        // Southeast
-    { x: -15, y: 1, z: -15 },       // Southwest
-    { x: 20, y: 1, z: 0 },          // East
-    { x: -20, y: 1, z: 0 },         // West
-    { x: 0, y: 1, z: 20 },          // North
-    { x: 0, y: 1, z: -20 }          // South
-  ];
+  const arenaSize = 40; // Arena size (40x40)
+  const halfSize = arenaSize / 2;
   
-  // Return random spawn position
-  return spawnPositions[Math.floor(Math.random() * spawnPositions.length)];
+  // Generate completely random position within arena bounds
+  const x = Math.random() * arenaSize - halfSize; // Random between -20 and 20
+  const z = Math.random() * arenaSize - halfSize; // Random between -20 and 20
+  const y = 1; // Fixed height for ground level
+  
+  return { x, y, z };
 }
 
 // Step 8.2: Check if spawn position is safe (not occupied by another player)
@@ -517,17 +511,59 @@ function isSpawnPositionSafe(position, playerId) {
 }
 
 // Step 8.2: Find safe spawn position
-function findSafeSpawnPosition(playerId, maxAttempts = 10) {
+function findSafeSpawnPosition(playerId, maxAttempts = 20) {
   for (let i = 0; i < maxAttempts; i++) {
     const position = generateRandomSpawnPosition();
     if (isSpawnPositionSafe(position, playerId)) {
+      console.log(`Found safe spawn position for player ${playerId} at (${position.x.toFixed(1)}, ${position.z.toFixed(1)}) after ${i + 1} attempts`);
       return position;
     }
   }
   
-  // If no safe position found, return center position
-  console.log(`Warning: Could not find safe spawn position for player ${playerId}, using center`);
-  return { x: 0, y: 1, z: 0 };
+  // If no safe position found after max attempts, find the least crowded area
+  console.log(`Warning: Could not find safe spawn position for player ${playerId} after ${maxAttempts} attempts, finding least crowded area`);
+  return findLeastCrowdedPosition(playerId);
+}
+
+// Find the position with maximum distance from other players
+function findLeastCrowdedPosition(playerId) {
+  const attempts = 50; // Test more positions to find the best one
+  let bestPosition = { x: 0, y: 1, z: 0 };
+  let maxMinDistance = 0;
+  
+  for (let i = 0; i < attempts; i++) {
+    const position = generateRandomSpawnPosition();
+    const minDistance = getMinDistanceToOtherPlayers(position, playerId);
+    
+    if (minDistance > maxMinDistance) {
+      maxMinDistance = minDistance;
+      bestPosition = position;
+    }
+  }
+  
+  console.log(`Using least crowded position at (${bestPosition.x.toFixed(1)}, ${bestPosition.z.toFixed(1)}) with min distance ${maxMinDistance.toFixed(1)}`);
+  return bestPosition;
+}
+
+// Helper function to get minimum distance to other players
+function getMinDistanceToOtherPlayers(position, playerId) {
+  const gameState = getGameStateForBroadcast();
+  const otherPlayers = gameState.players.filter(p => p.id !== playerId && p.isAlive);
+  
+  if (otherPlayers.length === 0) {
+    return Infinity; // No other players, position is perfect
+  }
+  
+  let minDistance = Infinity;
+  for (const player of otherPlayers) {
+    const distance = Math.sqrt(
+      Math.pow(position.x - player.position.x, 2) +
+      Math.pow(position.z - player.position.z, 2)
+    );
+    minDistance = Math.min(minDistance, distance);
+  }
+  
+  return minDistance;
 }
 
 // Step 8.2: Respawn eliminated player with random position
