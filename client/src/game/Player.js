@@ -4,6 +4,51 @@
 import * as THREE from 'three';
 import { addObjectToScene, removeObjectFromScene } from './Scene.js';
 import { createMissile, generateMissileId } from './Missile.js';
+import { modelLoader } from '../utils/ModelLoader.js';
+
+/**
+ * Car Model Configuration - Centralized settings for easy adjustment
+ * 
+ * This configuration object contains all car-related settings in one place.
+ * Modify these values to customize the car behavior, appearance, and scale.
+ * 
+ * TIPS FOR ADJUSTMENT:
+ * - If you change SCALE, also adjust WEAPON_POSITION and MISSILE_SPAWN_OFFSET proportionally
+ * - NAME_TAG_HEIGHT should be roughly 2-3x the car's height for good visibility
+ * - ARENA_BOUNDARY should be smaller than the actual arena size to prevent wall clipping
+ * - Colors use hexadecimal format (0x...) for Three.js materials
+ */
+const CAR_CONFIG = {
+  // Model settings
+  MODEL_PATH: '/assets/glb/race.glb',
+  SCALE: 2.5,
+  ROTATION_Y: Math.PI, // 180 degrees rotation
+  
+  // Positioning
+  GROUND_LEVEL: 0,
+  NAME_TAG_HEIGHT: 5,
+  ARENA_BOUNDARY: 48, // Arena boundary limit
+  
+  // Movement settings
+  MAX_SPEED: 15,
+  ACCELERATION: 25,
+  DECELERATION: 20,
+  TURN_SPEED: 3.5,
+  
+  // Weapon settings
+  WEAPON_POSITION: { x: 0, y: 1.5, z: -3.0 },
+  MISSILE_SPAWN_OFFSET: { x: 0, y: 1.5, z: -3.5 },
+  
+  // Colors
+  LOCAL_PLAYER_COLOR: 0x4CAF50,  // Green
+  REMOTE_PLAYER_COLOR: 0xFF5722, // Orange
+  
+  // Fallback box dimensions (if GLB fails to load)
+  FALLBACK_BOX_SIZE: { width: 2, height: 1, depth: 3 },
+  
+  // Name tag settings
+  NAME_TAG_SCALE: { x: 4, y: 1, z: 1 }
+};
 
 // Player class for client-side player management
 export class Player {
@@ -19,10 +64,10 @@ export class Player {
     this.speed = 0; // Current movement speed as a number
      
     // Movement configuration
-    this.maxSpeed = 15; // Maximum speed
-    this.acceleration = 25; // Acceleration rate
-    this.deceleration = 20; // Deceleration rate
-    this.turnSpeed = 3.5; // Turning speed in radians per second
+    this.maxSpeed = CAR_CONFIG.MAX_SPEED; // Maximum speed
+    this.acceleration = CAR_CONFIG.ACCELERATION; // Acceleration rate
+    this.deceleration = CAR_CONFIG.DECELERATION; // Deceleration rate
+    this.turnSpeed = CAR_CONFIG.TURN_SPEED; // Turning speed in radians per second
     
     // Movement state
     this.targetSpeed = 0; // Target speed for smooth acceleration
@@ -46,22 +91,90 @@ export class Player {
     this.mesh = null;
     this.nameTag = null;
     this.weaponMesh = null;
+    this.carModel = null; // Store the loaded car model
     
     // Initialize visual representation
-    this.createMesh();
+    // Note: createMesh() is now called asynchronously in PlayerManager.createPlayer()
     this.createNameTag();
     
     console.log(`Player created: ${name} (${isLocal ? 'Local' : 'Remote'})`);
   }
   
-  // Create basic cube geometry as placeholder kart
-  createMesh() {
-    // Create kart geometry - using box as placeholder for now
-    const kartGeometry = new THREE.BoxGeometry(2, 1, 3);
+  // Create car mesh from GLB model
+  async createMesh() {
+    try {
+      console.log(`🚗 Loading car model for player: ${this.name}`);
+      
+      // Load the race car model
+      const carModel = await modelLoader.loadModel(CAR_CONFIG.MODEL_PATH);
+      this.carModel = carModel;
+      
+      // Create a container group for the car
+      this.mesh = new THREE.Group();
+      this.mesh.add(carModel.scene);
+      
+      // Set appropriate scale for the car model
+      modelLoader.setModelScale(carModel, CAR_CONFIG.SCALE);
+      
+      // Set color based on player type
+      const carColor = this.isLocal ? CAR_CONFIG.LOCAL_PLAYER_COLOR : CAR_CONFIG.REMOTE_PLAYER_COLOR;
+      modelLoader.setModelColor(carModel, carColor);
+      
+      // Rotate the model if needed (some GLB models face different directions)
+      carModel.scene.rotation.y = CAR_CONFIG.ROTATION_Y;
+      
+      // Calculate bounding box to position car properly on ground
+      const box = new THREE.Box3().setFromObject(carModel.scene);
+      const boxSize = box.getSize(new THREE.Vector3());
+      const boxCenter = box.getCenter(new THREE.Vector3());
+      
+      // Adjust car position so bottom touches ground (y=0)
+      // Move the car up by half its height minus the center offset
+      carModel.scene.position.y = -box.min.y;
+      
+      console.log(`🚗 Car bounding box - Size: ${boxSize.x.toFixed(2)} x ${boxSize.y.toFixed(2)} x ${boxSize.z.toFixed(2)}`);
+      console.log(`🚗 Car position adjustment: y = ${(-box.min.y).toFixed(2)}`);
+      
+      // Position and rotation
+      this.mesh.position.copy(this.position);
+      this.mesh.rotation.copy(this.rotation);
+      
+      // Enable shadows for the entire model
+      this.mesh.traverse((node) => {
+        if (node.isMesh) {
+          node.castShadow = true;
+          node.receiveShadow = true;
+        }
+      });
+      
+      // Store reference to this player instance on the mesh for collision detection
+      this.mesh.userData.player = this;
+      
+      // Add to scene
+      addObjectToScene(this.mesh);
+      
+      console.log(`✅ Car model loaded successfully for player: ${this.name}`);
+      
+    } catch (error) {
+      console.error(`Failed to load car model for player ${this.name}, falling back to box geometry:`, error);
+      
+      // Fallback to box geometry if model loading fails
+      this.createFallbackMesh();
+    }
+  }
+  
+  // Fallback mesh creation with box geometry
+  createFallbackMesh() {
+    // Create kart geometry - using box as fallback
+    const kartGeometry = new THREE.BoxGeometry(
+      CAR_CONFIG.FALLBACK_BOX_SIZE.width,
+      CAR_CONFIG.FALLBACK_BOX_SIZE.height,
+      CAR_CONFIG.FALLBACK_BOX_SIZE.depth
+    );
     
     // Different colors for local vs remote players
     const kartMaterial = new THREE.MeshLambertMaterial({
-      color: this.isLocal ? 0x4CAF50 : 0xFF5722, // Green for local, orange for remote
+      color: this.isLocal ? CAR_CONFIG.LOCAL_PLAYER_COLOR : CAR_CONFIG.REMOTE_PLAYER_COLOR,
       transparent: false
     });
     
@@ -76,6 +189,8 @@ export class Player {
     
     // Add to scene
     addObjectToScene(this.mesh);
+    
+    console.log(`Fallback box mesh created for player: ${this.name}`);
   }
   
   // Create name tag above player
@@ -116,9 +231,13 @@ export class Player {
       const texture = new THREE.CanvasTexture(canvas);
       const material = new THREE.SpriteMaterial({ map: texture });
       this.nameTag = new THREE.Sprite(material);
-      this.nameTag.scale.set(4, 1, 1);
+      this.nameTag.scale.set(
+        CAR_CONFIG.NAME_TAG_SCALE.x,
+        CAR_CONFIG.NAME_TAG_SCALE.y,
+        CAR_CONFIG.NAME_TAG_SCALE.z
+      );
       this.nameTag.position.copy(this.position);
-      this.nameTag.position.y += 3; // Position above the kart
+      this.nameTag.position.y += CAR_CONFIG.NAME_TAG_HEIGHT; // Position above the car
       
       addObjectToScene(this.nameTag);
     }
@@ -140,7 +259,7 @@ export class Player {
       // Update name tag position
       if (this.nameTag) {
         this.nameTag.position.copy(this.position);
-        this.nameTag.position.y += 3;
+        this.nameTag.position.y += CAR_CONFIG.NAME_TAG_HEIGHT;
       }
       
       // Update weapon position
@@ -329,12 +448,11 @@ export class Player {
     this.position.add(movement);
     
     // Keep player on ground level
-    this.position.y = 1;
+    this.position.y = CAR_CONFIG.GROUND_LEVEL;
     
-    // Apply arena boundaries (100x100 arena)
-    const boundary = 48; // Slightly smaller than arena size
-    this.position.x = Math.max(-boundary, Math.min(boundary, this.position.x));
-    this.position.z = Math.max(-boundary, Math.min(boundary, this.position.z));
+    // Apply arena boundaries
+    this.position.x = Math.max(-CAR_CONFIG.ARENA_BOUNDARY, Math.min(CAR_CONFIG.ARENA_BOUNDARY, this.position.x));
+    this.position.z = Math.max(-CAR_CONFIG.ARENA_BOUNDARY, Math.min(CAR_CONFIG.ARENA_BOUNDARY, this.position.z));
     
     // Update mesh position and rotation
     if (this.mesh) {
@@ -357,10 +475,10 @@ export class Player {
     if (this.mesh) {
       const material = this.mesh.material;
       if (weapon === 'missile') {
-        material.emissive.setHex(0x444444); // Slight glow when armed
+        material?.emissive.setHex(0x444444); // Slight glow when armed
         this.createWeaponVisual(); // Create or show weapon visual
       } else {
-        material.emissive.setHex(0x000000); // No glow when unarmed
+        material?.emissive.setHex(0x000000); // No glow when unarmed
         this.hideWeaponVisual(); // Hide weapon visual instead of removing
       }
     }
@@ -380,7 +498,11 @@ export class Player {
         this.weaponMesh = new THREE.Mesh(missileGeometry, missileMaterial);
         
         // Position weapon relative to car (local coordinates)
-        this.weaponMesh.position.set(0, 0.8, -1.8); // In front and above
+        this.weaponMesh.position.set(
+          CAR_CONFIG.WEAPON_POSITION.x,
+          CAR_CONFIG.WEAPON_POSITION.y,
+          CAR_CONFIG.WEAPON_POSITION.z
+        );
         this.weaponMesh.rotation.x = Math.PI / 2; // Point forward horizontally
         
         // Make weapon a child of the car mesh so it moves with it automatically
@@ -418,7 +540,11 @@ export class Player {
     }
     
     // Calculate missile spawn position (in front of car)
-    const spawnOffset = new THREE.Vector3(0, 1, -2); // In front and slightly above
+    const spawnOffset = new THREE.Vector3(
+      CAR_CONFIG.MISSILE_SPAWN_OFFSET.x,
+      CAR_CONFIG.MISSILE_SPAWN_OFFSET.y,
+      CAR_CONFIG.MISSILE_SPAWN_OFFSET.z
+    );
     const worldSpawnOffset = spawnOffset.clone();
     worldSpawnOffset.applyEuler(this.rotation);
     
@@ -501,8 +627,34 @@ export class Player {
     
     if (this.mesh) {
       removeObjectFromScene(this.mesh);
-      this.mesh.geometry.dispose();
-      this.mesh.material.dispose();
+      
+      // Dispose of car model resources if it's a loaded GLB model
+      if (this.carModel) {
+        this.mesh.traverse((node) => {
+          if (node.isMesh) {
+            if (node.geometry) {
+              node.geometry.dispose();
+            }
+            if (node.material) {
+              if (Array.isArray(node.material)) {
+                node.material.forEach(mat => mat.dispose());
+              } else {
+                node.material.dispose();
+              }
+            }
+          }
+        });
+        this.carModel = null;
+      } else {
+        // Dispose of fallback box geometry
+        if (this.mesh.geometry) {
+          this.mesh.geometry.dispose();
+        }
+        if (this.mesh.material) {
+          this.mesh.material.dispose();
+        }
+      }
+      
       this.mesh = null;
     }
     
@@ -537,12 +689,21 @@ export class PlayerManager {
   }
   
   // Create a new player
-  createPlayer(id, name, position = { x: 0, y: 0, z: 0 }, isLocal = false) {
+  async createPlayer(id, name, position = { x: 0, y: 0, z: 0 }, isLocal = false) {
     const player = new Player(id, name, position, isLocal);
     this.players.set(id, player);
     
     if (isLocal) {
       this.localPlayer = player;
+    }
+    
+    // Wait for the mesh to be created (async model loading)
+    try {
+      await player.createMesh();
+      console.log(`Player mesh created successfully: ${name}`);
+    } catch (error) {
+      console.error(`Failed to create player mesh for ${name}:`, error);
+      // Player will already have fallback mesh from createMesh error handling
     }
     
     return player;
@@ -625,7 +786,7 @@ export class PlayerManager {
   }
 
   // Step 5.2: Sync players with server game state
-  syncWithGameState(gameState, localPlayerId = null) {
+  async syncWithGameState(gameState, localPlayerId = null) {
     if (!gameState || !gameState.players) {
       return;
     }
@@ -633,7 +794,7 @@ export class PlayerManager {
     const serverPlayerIds = new Set();
 
     // Update or create players from server data
-    gameState.players.forEach(serverPlayer => {
+    for (const serverPlayer of gameState.players) {
       serverPlayerIds.add(serverPlayer.id);
       
       const existingPlayer = this.players.get(serverPlayer.id);
@@ -668,7 +829,7 @@ export class PlayerManager {
         existingPlayer.updateAliveStatus(serverPlayer.isAlive);
       } else {
         // Create new player
-        const newPlayer = this.createPlayer(
+        const newPlayer = await this.createPlayer(
           serverPlayer.id,
           serverPlayer.name,
           serverPlayer.position,
@@ -690,7 +851,7 @@ export class PlayerManager {
           }
         }
       }
-    });
+    }
 
     // Remove players that are no longer on server (disconnected)
     const playersToRemove = [];
@@ -722,3 +883,37 @@ export class PlayerManager {
 
 // Export singleton instance for global use
 export const playerManager = new PlayerManager();
+
+// Export car configuration for use in other modules
+export { CAR_CONFIG };
+
+/**
+ * Helper function to create a scaled version of the car configuration
+ * Useful when you want to experiment with different car sizes
+ * 
+ * @param {number} newScale - The new scale factor for the car
+ * @returns {object} A new configuration object with scaled values
+ * 
+ * Example:
+ * const smallCarConfig = createScaledCarConfig(1.5);
+ * const bigCarConfig = createScaledCarConfig(3.0);
+ */
+export function createScaledCarConfig(newScale) {
+  const scaleFactor = newScale / CAR_CONFIG.SCALE;
+  
+  return {
+    ...CAR_CONFIG,
+    SCALE: newScale,
+    NAME_TAG_HEIGHT: CAR_CONFIG.NAME_TAG_HEIGHT * scaleFactor,
+    WEAPON_POSITION: {
+      x: CAR_CONFIG.WEAPON_POSITION.x * scaleFactor,
+      y: CAR_CONFIG.WEAPON_POSITION.y * scaleFactor,
+      z: CAR_CONFIG.WEAPON_POSITION.z * scaleFactor
+    },
+    MISSILE_SPAWN_OFFSET: {
+      x: CAR_CONFIG.MISSILE_SPAWN_OFFSET.x * scaleFactor,
+      y: CAR_CONFIG.MISSILE_SPAWN_OFFSET.y * scaleFactor,
+      z: CAR_CONFIG.MISSILE_SPAWN_OFFSET.z * scaleFactor
+    }
+  };
+}
