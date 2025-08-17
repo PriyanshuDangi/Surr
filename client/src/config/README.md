@@ -17,11 +17,21 @@ SCALE: 2.5,  // Change this value (1.0 = original size, 2.0 = double size, etc.)
 MODEL_PATH: '/assets/glb/your-car-model.glb',
 ```
 
-### Change Player Colors
+### Change Race Car Part Colors
 ```javascript
-// In Player.js, modify:
-LOCAL_PLAYER_COLOR: 0x4CAF50,   // Green for local player
-REMOTE_PLAYER_COLOR: 0xFF5722,  // Orange for remote players
+// In Player.js, modify the RACE_CAR_PARTS section:
+RACE_CAR_PARTS: {
+  TIRES: {
+    COLOR: 0x1a1a1a,  // Black tires
+    MATERIAL_TYPE: 'matte'
+  },
+  BODY: {
+    LOCAL_COLOR: 0x2E7D32,   // Dark green for local player
+    REMOTE_COLOR: 0xD84315,  // Dark orange for remote player
+    MATERIAL_TYPE: 'metallic'
+  },
+  // ... other parts
+}
 ```
 
 ### Adjust Movement Speed
