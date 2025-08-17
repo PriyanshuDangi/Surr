@@ -42,7 +42,7 @@ app.use('/assets', express.static(path.join(__dirname, '../../client/assets')));
 
 // Health check route
 app.get('/health', (req, res) => {
-  res.json({ status: 'OK', message: 'Surr Game Server is running' });
+  res.json({ status: 'OK', message: 'Surr Game Server is running like its cars' });
 });
 
 // Error handling
