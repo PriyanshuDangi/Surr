@@ -322,7 +322,7 @@ export class Player {
     
     if (this.nameTag) {
       this.nameTag.position.copy(this.position);
-      this.nameTag.position.y += 3;
+      this.nameTag.position.y += CAR_CONFIG.NAME_TAG_HEIGHT;
     }
   }
   
@@ -382,7 +382,7 @@ export class Player {
     // Update name tag position
     if (this.nameTag) {
       this.nameTag.position.copy(this.position);
-      this.nameTag.position.y += 3;
+      this.nameTag.position.y += CAR_CONFIG.NAME_TAG_HEIGHT;
     }
     
     // Update weapon position
@@ -463,7 +463,7 @@ export class Player {
     // Update name tag position
     if (this.nameTag) {
       this.nameTag.position.copy(this.position);
-      this.nameTag.position.y += 3;
+      this.nameTag.position.y += CAR_CONFIG.NAME_TAG_HEIGHT;
     }
   }
   
@@ -471,16 +471,11 @@ export class Player {
   updateWeapon(weapon) {
     this.weapon = weapon;
     
-    // Visual indication of weapon status
-    if (this.mesh) {
-      const material = this.mesh.material;
-      if (weapon === 'missile') {
-        material?.emissive.setHex(0x444444); // Slight glow when armed
-        this.createWeaponVisual(); // Create or show weapon visual
-      } else {
-        material?.emissive.setHex(0x000000); // No glow when unarmed
-        this.hideWeaponVisual(); // Hide weapon visual instead of removing
-      }
+    // Visual indication of weapon status with weapon mesh only
+    if (weapon === 'missile') {
+      this.createWeaponVisual(); // Create or show weapon visual
+    } else {
+      this.hideWeaponVisual(); // Hide weapon visual instead of removing
     }
   }
   
