@@ -370,10 +370,10 @@ export function disposeGameEngine() {
 }
 
 // Step 5.2: Handle game state updates from server
-function handleGameStateUpdate(gameState) {
+async function handleGameStateUpdate(gameState) {
   // Step 5.4: Sync players with local player ID for proper identification
   const localPlayerId = getLocalPlayerId();
-  playerManager.syncWithGameState(gameState, localPlayerId);
+  await playerManager.syncWithGameState(gameState, localPlayerId);
   
   // Step 6.2: Update weapon pickups from server data
   if (gameState.weaponBoxes) {
@@ -387,14 +387,14 @@ function handleGameStateUpdate(gameState) {
 }
 
 // Step 5.4: Create local player when joining game
-function createLocalPlayer() {
+async function createLocalPlayer() {
   const playerName = getPlayerName();
   if (playerName) {
     console.log('Creating local player:', playerName);
-    const localPlayer = playerManager.createPlayer(
+    const localPlayer = await playerManager.createPlayer(
       'local-player', // This will be updated by server data
       playerName,
-      { x: 0, y: 1, z: 0 },
+      { x: 0, y: 0, z: 0 }, // Ground level spawn
       true // isLocal = true
     );
     console.log('Local player created:', localPlayer.name);
@@ -402,13 +402,13 @@ function createLocalPlayer() {
 }
 
 // Create test player for Step 4.1 verification
-function createTestPlayer() {
+async function createTestPlayer() {
   try {
     // Create a local test player at arena center
-    const testPlayer = playerManager.createPlayer(
+    const testPlayer = await playerManager.createPlayer(
       'test-local-player',
       'TestPlayer',
-      { x: 0, y: 1, z: 0 },
+      { x: 0, y: 0, z: 0 }, // Ground level spawn
       true // isLocal = true
     );
     
@@ -416,7 +416,7 @@ function createTestPlayer() {
     // No need to create test remote player manually
     
     console.log('Test players created successfully');
-    console.log('Local player (green cube):', testPlayer.name);
+    console.log('Local player (green car):', testPlayer.name);
     console.log('Remote players will be created when server sends game state');
     
     return { testPlayer };
