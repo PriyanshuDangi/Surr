@@ -2,6 +2,7 @@
 // Function-based scene management for Three.js rendering
 
 import * as THREE from 'three';
+import { createGroundPlane, disposeGroundPlane } from './components/Ground.js';
 
 // Scene state
 let canvas = null;
@@ -35,7 +36,7 @@ function setupRenderer() {
   
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setClearColor(0x1a1a2e);
+  renderer.setClearColor(0x87CEEB); // Sky blue color
   
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -45,7 +46,7 @@ function setupRenderer() {
 
 function setupScene() {
   scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(0x1a1a2e, 50, 200);
+  scene.fog = new THREE.Fog(0x87CEEB, 50, 200); // Sky blue fog to match sky
   
   console.log('Scene created');
 }
@@ -66,10 +67,12 @@ function setupCamera() {
 }
 
 function setupLighting() {
-  const ambientLight = new THREE.AmbientLight(0x404040, 0.4);
+  // Brighter ambient light for overall scene illumination
+  const ambientLight = new THREE.AmbientLight(0x606060, 0.6);
   scene.add(ambientLight);
 
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+  // Brighter directional light (main sun light)
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 1.4);
   directionalLight.position.set(50, 50, 50);
   directionalLight.castShadow = true;
   
@@ -84,25 +87,26 @@ function setupLighting() {
   
   scene.add(directionalLight);
 
-  const pointLight = new THREE.PointLight(0x4a90e2, 0.6, 100);
+  // Brighter point light for additional illumination
+  const pointLight = new THREE.PointLight(0x6ba0f2, 0.8, 120);
   pointLight.position.set(0, 30, 0);
   scene.add(pointLight);
   
-  console.log('Lighting setup complete');
+  // Additional fill light to reduce harsh shadows
+  const fillLight = new THREE.DirectionalLight(0x87CEEB, 0.3);
+  fillLight.position.set(-30, 20, -30);
+  scene.add(fillLight);
+  
+  console.log('Enhanced lighting setup complete');
 }
 
 function setupArena() {
-  // Create ground plane
-  const groundGeometry = new THREE.PlaneGeometry(100, 100);
-  const groundMaterial = new THREE.MeshLambertMaterial({
-    color: 0x2d5a87,
-    transparent: true,
-    opacity: 0.8
+  // Create ground plane using Ground.js module
+  groundPlane = createGroundPlane({
+    size: 100,
+    boxSize: 4,
+    piece: 5
   });
-  
-  groundPlane = new THREE.Mesh(groundGeometry, groundMaterial);
-  groundPlane.rotation.x = -Math.PI / 2;
-  groundPlane.receiveShadow = true;
   scene.add(groundPlane);
 
   createArenaWalls();
@@ -217,6 +221,9 @@ export function getCameraTarget() {
 
 // Cleanup method
 export function disposeScene() {
+  // Dispose ground plane
+  disposeGroundPlane();
+  
   if (scene) {
     scene.traverse((object) => {
       if (object.geometry) {
