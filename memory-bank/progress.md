@@ -15,7 +15,6 @@ Surr is a fast-paced, online multiplayer arena kart game built with Three.js (cl
 
 ### 1.1 Directory Structure
 - ✅ Created separate `client/` and `server/` directories
-- ✅ Isolated from Sketchbook project completely
 - ✅ Asset folder structure: `client/assets/` for car.glb only
 
 ### 1.2 Package Configuration
@@ -157,7 +156,6 @@ Surr is a fast-paced, online multiplayer arena kart game built with Three.js (cl
 
 ### 🎯 READY FOR
 - Phase 6: Physics Integration with Cannon.js
-- Car physics implementation using Sketchbook reference
 - Arena boundaries and collision detection
 
 ---

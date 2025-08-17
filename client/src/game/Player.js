@@ -4,6 +4,123 @@
 import * as THREE from 'three';
 import { addObjectToScene, removeObjectFromScene } from './Scene.js';
 import { createMissile, generateMissileId } from './Missile.js';
+import { modelLoader } from '../utils/ModelLoader.js';
+
+/**
+ * Car Model Configuration - Centralized settings for easy adjustment
+ * 
+ * This configuration object contains all car-related settings in one place.
+ * Modify these values to customize the car behavior, appearance, and scale.
+ * 
+ * TIPS FOR ADJUSTMENT:
+ * - If you change SCALE, also adjust WEAPON_POSITION and MISSILE_SPAWN_OFFSET proportionally
+ * - NAME_TAG_HEIGHT should be roughly 2-3x the car's height for good visibility
+ * - ARENA_BOUNDARY should be smaller than the actual arena size to prevent wall clipping
+ * - Colors use hexadecimal format (0x...) for Three.js materials
+ * - FRONT_WHEEL settings control the realistic steering behavior of front wheels
+ */
+const CAR_CONFIG = {
+  // Model settings
+  MODEL_PATH: '/assets/glb/race.glb',
+  SCALE: 2.5,
+  ROTATION_Y: Math.PI, // 180 degrees rotation
+  
+  // Positioning
+  GROUND_LEVEL: 0,
+  NAME_TAG_HEIGHT: 5,
+  ARENA_BOUNDARY: 48, // Arena boundary limit
+  
+  // Movement settings
+  MAX_SPEED: 15,
+  ACCELERATION: 25,
+  DECELERATION: 20,
+  TURN_SPEED: 3.5,
+  
+  // Weapon settings
+  WEAPON_POSITION: { x: 0, y: 1.5, z: -3.0 },
+  MISSILE_SPAWN_OFFSET: { x: 0, y: 1.5, z: -3.5 },
+  
+  // Colors
+  LOCAL_PLAYER_COLOR: 0x4CAF50,  // Green
+  REMOTE_PLAYER_COLOR: 0xFF5722, // Orange
+  
+  // Fallback box dimensions (if GLB fails to load)
+  FALLBACK_BOX_SIZE: { width: 2, height: 1, depth: 3 },
+  
+  // Name tag settings
+  NAME_TAG_SCALE: { x: 4, y: 1, z: 1 },
+  
+  // Front wheel steering settings
+  FRONT_WHEEL: {
+    // Common names for front wheels in GLB models
+    POSSIBLE_NAMES: [
+      'wheel', 'Wheel', 'WHEEL',
+      'tire', 'Tire', 'TIRE', 
+      'rim', 'Rim', 'RIM',
+      'front_wheel', 'front_tire',
+      'wheel_f', 'wheel_front',
+      'wheelF', 'wheelFront',
+      'wheel_fl', 'wheel_fr', // front-left, front-right
+      'wheelFL', 'wheelFR'
+    ],
+    // Steering settings
+    MAX_STEERING_ANGLE: Math.PI / 6, // 30 degrees max steering
+    STEERING_SPEED: 8.0, // How fast wheels turn when steering
+    // Position threshold to identify front wheels
+    // 'auto' = auto-detect based on model orientation
+    // 'low' = assume front wheels have lower Z coordinates
+    // 'high' = assume front wheels have higher Z coordinates
+    FRONT_THRESHOLD: 'auto'
+  },
+  
+  // Race car part coloring system
+  RACE_CAR_PARTS: {
+    // Tire/wheel coloring
+    TIRES: {
+      NAMES: ['tire', 'tyre', 'wheel', 'rim'], // Common tire names
+      COLOR: 0x000000, // Pure black for tires
+      MATERIAL_TYPE: 'matte' // Matte finish for tires
+    },
+    
+    // Car body parts
+    BODY: {
+      NAMES: ['body', 'chassis', 'hull', 'frame', 'car', 'vehicle'],
+      LOCAL_COLOR: 0xFF5722,  // Bright orange for local player body
+      REMOTE_COLOR: 0xFF7043, // Lighter orange for remote player body
+      MATERIAL_TYPE: 'metallic' // Metallic finish for body
+    },
+    
+    // Wing/spoiler parts
+    WINGS: {
+      NAMES: ['wing', 'spoiler', 'aero', 'fin'],
+      LOCAL_COLOR: 0xE64A19,  // Darker orange for local player wings
+      REMOTE_COLOR: 0xFF5722, // Bright orange for remote player wings
+      MATERIAL_TYPE: 'metallic'
+    },
+    
+    // Detail parts (bumpers, mirrors, etc.)
+    DETAILS: {
+      NAMES: ['bumper', 'mirror', 'light', 'headlight', 'taillight', 'detail'],
+      COLOR: 0x424242, // Dark gray for details
+      MATERIAL_TYPE: 'plastic'
+    },
+    
+    // Window/glass parts
+    GLASS: {
+      NAMES: ['window', 'windshield', 'glass', 'windscreen'],
+      COLOR: 0x616161, // Medium grey for windows
+      MATERIAL_TYPE: 'glass',
+      OPACITY: 0.8 // Semi-transparent
+    },
+    
+    // Default fallback for unidentified parts
+    DEFAULT: {
+      LOCAL_COLOR: 0x4CAF50,  // Standard green
+      REMOTE_COLOR: 0xFF5722, // Standard orange
+      MATERIAL_TYPE: 'standard'
+    }
+  }
+};
 
 // Player class for client-side player management
 export class Player {
@@ -19,10 +136,10 @@ export class Player {
     this.speed = 0; // Current movement speed as a number
      
     // Movement configuration
-    this.maxSpeed = 15; // Maximum speed
-    this.acceleration = 25; // Acceleration rate
-    this.deceleration = 20; // Deceleration rate
-    this.turnSpeed = 3.5; // Turning speed in radians per second
+    this.maxSpeed = CAR_CONFIG.MAX_SPEED; // Maximum speed
+    this.acceleration = CAR_CONFIG.ACCELERATION; // Acceleration rate
+    this.deceleration = CAR_CONFIG.DECELERATION; // Deceleration rate
+    this.turnSpeed = CAR_CONFIG.TURN_SPEED; // Turning speed in radians per second
     
     // Movement state
     this.targetSpeed = 0; // Target speed for smooth acceleration
@@ -46,22 +163,96 @@ export class Player {
     this.mesh = null;
     this.nameTag = null;
     this.weaponMesh = null;
+    this.carModel = null; // Store the loaded car model
+    
+    // Front wheel steering
+    this.frontWheels = []; // Array of front wheel objects
+    this.steeringAngle = 0; // Current steering angle
     
     // Initialize visual representation
-    this.createMesh();
+    // Note: createMesh() is now called asynchronously in PlayerManager.createPlayer()
     this.createNameTag();
     
     console.log(`Player created: ${name} (${isLocal ? 'Local' : 'Remote'})`);
   }
   
-  // Create basic cube geometry as placeholder kart
-  createMesh() {
-    // Create kart geometry - using box as placeholder for now
-    const kartGeometry = new THREE.BoxGeometry(2, 1, 3);
+  // Create car mesh from GLB model
+  async createMesh() {
+    try {
+      console.log(`🚗 Loading car model for player: ${this.name}`);
+      
+      // Load the race car model
+      const carModel = await modelLoader.loadModel(CAR_CONFIG.MODEL_PATH);
+      this.carModel = carModel;
+      
+      // Create a container group for the car
+      this.mesh = new THREE.Group();
+      this.mesh.add(carModel.scene);
+      
+      // Set appropriate scale for the car model
+      modelLoader.setModelScale(carModel, CAR_CONFIG.SCALE);
+      
+      // Apply realistic race car colors to different parts
+      modelLoader.setRaceCarColors(carModel, this.isLocal, CAR_CONFIG.RACE_CAR_PARTS);
+      
+      // Rotate the model if needed (some GLB models face different directions)
+      carModel.scene.rotation.y = CAR_CONFIG.ROTATION_Y;
+      
+      // Calculate bounding box to position car properly on ground
+      const box = new THREE.Box3().setFromObject(carModel.scene);
+      const boxSize = box.getSize(new THREE.Vector3());
+      const boxCenter = box.getCenter(new THREE.Vector3());
+      
+      // Adjust car position so bottom touches ground (y=0)
+      // Move the car up by half its height minus the center offset
+      carModel.scene.position.y = -box.min.y;
+      
+      console.log(`🚗 Car bounding box - Size: ${boxSize.x.toFixed(2)} x ${boxSize.y.toFixed(2)} x ${boxSize.z.toFixed(2)}`);
+      console.log(`🚗 Car position adjustment: y = ${(-box.min.y).toFixed(2)}`);
+      
+      // Find and setup front wheels for steering
+      this.findFrontWheels(carModel.scene);
+      
+      // Position and rotation
+      this.mesh.position.copy(this.position);
+      this.mesh.rotation.copy(this.rotation);
+      
+      // Enable shadows for the entire model
+      this.mesh.traverse((node) => {
+        if (node.isMesh) {
+          node.castShadow = true;
+          node.receiveShadow = true;
+        }
+      });
+      
+      // Store reference to this player instance on the mesh for collision detection
+      this.mesh.userData.player = this;
+      
+      // Add to scene
+      addObjectToScene(this.mesh);
+      
+      console.log(`✅ Car model loaded successfully for player: ${this.name}`);
+      
+    } catch (error) {
+      console.error(`Failed to load car model for player ${this.name}, falling back to box geometry:`, error);
+      
+      // Fallback to box geometry if model loading fails
+      this.createFallbackMesh();
+    }
+  }
+  
+  // Fallback mesh creation with box geometry
+  createFallbackMesh() {
+    // Create kart geometry - using box as fallback
+    const kartGeometry = new THREE.BoxGeometry(
+      CAR_CONFIG.FALLBACK_BOX_SIZE.width,
+      CAR_CONFIG.FALLBACK_BOX_SIZE.height,
+      CAR_CONFIG.FALLBACK_BOX_SIZE.depth
+    );
     
     // Different colors for local vs remote players
     const kartMaterial = new THREE.MeshLambertMaterial({
-      color: this.isLocal ? 0x4CAF50 : 0xFF5722, // Green for local, orange for remote
+      color: this.isLocal ? CAR_CONFIG.LOCAL_PLAYER_COLOR : CAR_CONFIG.REMOTE_PLAYER_COLOR,
       transparent: false
     });
     
@@ -76,6 +267,160 @@ export class Player {
     
     // Add to scene
     addObjectToScene(this.mesh);
+    
+    console.log(`Fallback box mesh created for player: ${this.name}`);
+  }
+  
+  // Find front wheels in the car model for steering
+  findFrontWheels(carScene) {
+    console.log(`🛞 Searching for front wheels in car model for player: ${this.name}`);
+    
+    // Reset front wheels array
+    this.frontWheels = [];
+    
+    // First, find ALL wheels and their positions
+    const allWheels = [];
+    carScene.traverse((node) => {
+      if (node.isMesh || node.isGroup) {
+        const nodeName = node.name.toLowerCase();
+        
+        // Check if this node is a wheel based on common naming patterns
+        const isWheel = CAR_CONFIG.FRONT_WHEEL.POSSIBLE_NAMES.some(wheelName => 
+          nodeName.includes(wheelName.toLowerCase())
+        );
+        
+        if (isWheel) {
+          allWheels.push(node);
+          console.log(`🛞 Found wheel: ${node.name} at position (${node.position.x.toFixed(2)}, ${node.position.y.toFixed(2)}, ${node.position.z.toFixed(2)})`);
+        }
+      }
+    });
+    
+    if (allWheels.length === 0) {
+      console.log(`⚠️ No wheels found by name, trying geometry-based detection...`);
+      this.findFrontWheelsByPosition(carScene);
+      return;
+    }
+    
+    // Determine which direction is "front" by analyzing wheel positions
+    // The car is rotated 180 degrees (Math.PI), so we need to account for this
+    const zPositions = allWheels.map(wheel => wheel.position.z);
+    const minZ = Math.min(...zPositions);
+    const maxZ = Math.max(...zPositions);
+    const centerZ = (minZ + maxZ) / 2;
+    
+    console.log(`🛞 Wheel Z positions: min=${minZ.toFixed(2)}, max=${maxZ.toFixed(2)}, center=${centerZ.toFixed(2)}`);
+    
+    // Since the car is rotated 180 degrees, the "front" in model space 
+    // might be at the higher Z values. Let's check both possibilities.
+    let frontCandidatesHigh = allWheels.filter(wheel => wheel.position.z > centerZ);
+    let frontCandidatesLow = allWheels.filter(wheel => wheel.position.z < centerZ);
+    
+    // If we have specific front wheel naming patterns, use those to determine orientation
+    const hasExplicitFrontNames = allWheels.some(wheel => {
+      const name = wheel.name.toLowerCase();
+      return name.includes('front') || name.includes('_f') || name.includes('fl') || name.includes('fr');
+    });
+    
+    if (hasExplicitFrontNames) {
+      // Use explicit naming to identify front wheels
+      this.frontWheels = allWheels.filter(wheel => {
+        const name = wheel.name.toLowerCase();
+        return name.includes('front') || name.includes('_f') || name.includes('fl') || name.includes('fr');
+      });
+      console.log(`🛞 Using explicit front wheel naming`);
+    } else {
+      // Handle manual threshold overrides
+      if (CAR_CONFIG.FRONT_WHEEL.FRONT_THRESHOLD === 'low') {
+        this.frontWheels = frontCandidatesLow;
+        console.log(`🛞 Manual override: using LOW Z position wheels as front`);
+      } else if (CAR_CONFIG.FRONT_WHEEL.FRONT_THRESHOLD === 'high') {
+        this.frontWheels = frontCandidatesHigh;
+        console.log(`🛞 Manual override: using HIGH Z position wheels as front`);
+      } else {
+        // Auto-detection logic
+        // For race.glb, let's assume front wheels are at higher Z (since car is rotated 180°)
+        // But let's be smart about it - typically there are 2 front wheels and 2 rear wheels
+        if (frontCandidatesHigh.length === 2 && frontCandidatesLow.length === 2) {
+          this.frontWheels = frontCandidatesHigh; // Try higher Z first
+          console.log(`🛞 Auto-detection: front wheels at higher Z positions (accounting for 180° rotation)`);
+        } else if (frontCandidatesLow.length === 2 && frontCandidatesHigh.length === 2) {
+          this.frontWheels = frontCandidatesLow; // Fallback to lower Z
+          console.log(`🛞 Auto-detection: front wheels at lower Z positions`);
+        } else {
+          // If wheel count doesn't match expected, take the ones closer to the maximum Z
+          this.frontWheels = frontCandidatesHigh.length > 0 ? frontCandidatesHigh : frontCandidatesLow;
+          console.log(`🛞 Auto-detection: using position-based fallback (irregular wheel count)`);
+        }
+      }
+    }
+    
+    this.frontWheels.forEach(wheel => {
+      console.log(`  ✅ Selected as FRONT wheel: ${wheel.name} at z=${wheel.position.z.toFixed(2)}`);
+    });
+    
+    console.log(`🛞 Front wheel detection complete: ${this.frontWheels.length} front wheels found`);
+    
+    // If still no front wheels found, try alternative detection
+    if (this.frontWheels.length === 0) {
+      console.log(`⚠️ No front wheels identified, trying fallback detection...`);
+      this.findFrontWheelsByPosition(carScene);
+    }
+  }
+  
+  // Alternative front wheel detection by position (fallback method)
+  findFrontWheelsByPosition(carScene) {
+    const potentialWheels = [];
+    
+    carScene.traverse((node) => {
+      if (node.isMesh && node.geometry) {
+        // Look for objects that could be wheels based on geometry
+        const boundingBox = new THREE.Box3().setFromObject(node);
+        const size = boundingBox.getSize(new THREE.Vector3());
+        
+        // Check if object has wheel-like proportions
+        const aspectRatio = size.x / size.z;
+        const heightRatio = size.y / Math.max(size.x, size.z);
+        
+        // Likely a wheel if roughly circular and not too tall
+        if (aspectRatio > 0.5 && aspectRatio < 2.0 && heightRatio < 0.8 && size.x > 0.1) {
+          potentialWheels.push({ node, z: node.position.z });
+          console.log(`🛞 Found potential wheel by geometry: ${node.name || 'unnamed'} at z=${node.position.z.toFixed(2)}`);
+        }
+      }
+    });
+    
+    if (potentialWheels.length >= 2) {
+      // Sort by Z position and take the front ones
+      potentialWheels.sort((a, b) => b.z - a.z); // Sort high to low Z
+      
+      // Take the front half (assuming 4 wheels total, take front 2)
+      const frontCount = Math.min(2, Math.ceil(potentialWheels.length / 2));
+      this.frontWheels = potentialWheels.slice(0, frontCount).map(wheel => wheel.node);
+      
+      console.log(`🛞 Position-based detection selected front wheels at Z positions: ${this.frontWheels.map(w => w.position.z.toFixed(2)).join(', ')}`);
+    }
+    
+    console.log(`🛞 Position-based detection found: ${this.frontWheels.length} front wheels`);
+  }
+  
+  // Update front wheel steering based on input
+  updateFrontWheelSteering(inputState, deltaTime) {
+    if (this.frontWheels.length === 0) return;
+    
+    // Calculate target steering angle based on input
+    let targetSteeringAngle = 0;
+    if (inputState.left) targetSteeringAngle = CAR_CONFIG.FRONT_WHEEL.MAX_STEERING_ANGLE;
+    if (inputState.right) targetSteeringAngle = -CAR_CONFIG.FRONT_WHEEL.MAX_STEERING_ANGLE;
+    
+    // Smooth steering transition
+    const steeringDiff = targetSteeringAngle - this.steeringAngle;
+    this.steeringAngle += Math.sign(steeringDiff) * Math.min(Math.abs(steeringDiff), CAR_CONFIG.FRONT_WHEEL.STEERING_SPEED * deltaTime);
+    
+    // Apply steering angle to front wheels
+    this.frontWheels.forEach(wheel => {
+      wheel.rotation.y = this.steeringAngle;
+    });
   }
   
   // Create name tag above player
@@ -94,8 +439,11 @@ export class Player {
     context.fillStyle = 'rgba(0, 0, 0, 0.8)';
     context.fillRect(0, 0, canvas.width, canvas.height);
     
-    // Draw border
-    context.strokeStyle = this.isLocal ? '#4CAF50' : '#FF5722';
+    // Draw border using car body colors
+    const borderColor = this.isLocal ? 
+      `#${CAR_CONFIG.RACE_CAR_PARTS.BODY.LOCAL_COLOR.toString(16).padStart(6, '0')}` : 
+      `#${CAR_CONFIG.RACE_CAR_PARTS.BODY.REMOTE_COLOR.toString(16).padStart(6, '0')}`;
+    context.strokeStyle = borderColor;
     context.lineWidth = 2;
     context.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
     
@@ -116,9 +464,13 @@ export class Player {
       const texture = new THREE.CanvasTexture(canvas);
       const material = new THREE.SpriteMaterial({ map: texture });
       this.nameTag = new THREE.Sprite(material);
-      this.nameTag.scale.set(4, 1, 1);
+      this.nameTag.scale.set(
+        CAR_CONFIG.NAME_TAG_SCALE.x,
+        CAR_CONFIG.NAME_TAG_SCALE.y,
+        CAR_CONFIG.NAME_TAG_SCALE.z
+      );
       this.nameTag.position.copy(this.position);
-      this.nameTag.position.y += 3; // Position above the kart
+      this.nameTag.position.y += CAR_CONFIG.NAME_TAG_HEIGHT; // Position above the car
       
       addObjectToScene(this.nameTag);
     }
@@ -140,7 +492,7 @@ export class Player {
       // Update name tag position
       if (this.nameTag) {
         this.nameTag.position.copy(this.position);
-        this.nameTag.position.y += 3;
+        this.nameTag.position.y += CAR_CONFIG.NAME_TAG_HEIGHT;
       }
       
       // Update weapon position
@@ -203,7 +555,7 @@ export class Player {
     
     if (this.nameTag) {
       this.nameTag.position.copy(this.position);
-      this.nameTag.position.y += 3;
+      this.nameTag.position.y += CAR_CONFIG.NAME_TAG_HEIGHT;
     }
   }
   
@@ -263,7 +615,7 @@ export class Player {
     // Update name tag position
     if (this.nameTag) {
       this.nameTag.position.copy(this.position);
-      this.nameTag.position.y += 3;
+      this.nameTag.position.y += CAR_CONFIG.NAME_TAG_HEIGHT;
     }
     
     // Update weapon position
@@ -329,12 +681,11 @@ export class Player {
     this.position.add(movement);
     
     // Keep player on ground level
-    this.position.y = 1;
+    this.position.y = CAR_CONFIG.GROUND_LEVEL;
     
-    // Apply arena boundaries (100x100 arena)
-    const boundary = 48; // Slightly smaller than arena size
-    this.position.x = Math.max(-boundary, Math.min(boundary, this.position.x));
-    this.position.z = Math.max(-boundary, Math.min(boundary, this.position.z));
+    // Apply arena boundaries
+    this.position.x = Math.max(-CAR_CONFIG.ARENA_BOUNDARY, Math.min(CAR_CONFIG.ARENA_BOUNDARY, this.position.x));
+    this.position.z = Math.max(-CAR_CONFIG.ARENA_BOUNDARY, Math.min(CAR_CONFIG.ARENA_BOUNDARY, this.position.z));
     
     // Update mesh position and rotation
     if (this.mesh) {
@@ -345,24 +696,22 @@ export class Player {
     // Update name tag position
     if (this.nameTag) {
       this.nameTag.position.copy(this.position);
-      this.nameTag.position.y += 3;
+      this.nameTag.position.y += CAR_CONFIG.NAME_TAG_HEIGHT;
     }
+    
+    // Update front wheel steering for realistic movement
+    this.updateFrontWheelSteering(inputState, deltaTime);
   }
   
   // Update weapon state
   updateWeapon(weapon) {
     this.weapon = weapon;
     
-    // Visual indication of weapon status
-    if (this.mesh) {
-      const material = this.mesh.material;
-      if (weapon === 'missile') {
-        material.emissive.setHex(0x444444); // Slight glow when armed
-        this.createWeaponVisual(); // Create or show weapon visual
-      } else {
-        material.emissive.setHex(0x000000); // No glow when unarmed
-        this.hideWeaponVisual(); // Hide weapon visual instead of removing
-      }
+    // Visual indication of weapon status with weapon mesh only
+    if (weapon === 'missile') {
+      this.createWeaponVisual(); // Create or show weapon visual
+    } else {
+      this.hideWeaponVisual(); // Hide weapon visual instead of removing
     }
   }
   
@@ -380,7 +729,11 @@ export class Player {
         this.weaponMesh = new THREE.Mesh(missileGeometry, missileMaterial);
         
         // Position weapon relative to car (local coordinates)
-        this.weaponMesh.position.set(0, 0.8, -1.8); // In front and above
+        this.weaponMesh.position.set(
+          CAR_CONFIG.WEAPON_POSITION.x,
+          CAR_CONFIG.WEAPON_POSITION.y,
+          CAR_CONFIG.WEAPON_POSITION.z
+        );
         this.weaponMesh.rotation.x = Math.PI / 2; // Point forward horizontally
         
         // Make weapon a child of the car mesh so it moves with it automatically
@@ -418,7 +771,11 @@ export class Player {
     }
     
     // Calculate missile spawn position (in front of car)
-    const spawnOffset = new THREE.Vector3(0, 1, -2); // In front and slightly above
+    const spawnOffset = new THREE.Vector3(
+      CAR_CONFIG.MISSILE_SPAWN_OFFSET.x,
+      CAR_CONFIG.MISSILE_SPAWN_OFFSET.y,
+      CAR_CONFIG.MISSILE_SPAWN_OFFSET.z
+    );
     const worldSpawnOffset = spawnOffset.clone();
     worldSpawnOffset.applyEuler(this.rotation);
     
@@ -501,10 +858,40 @@ export class Player {
     
     if (this.mesh) {
       removeObjectFromScene(this.mesh);
-      this.mesh.geometry.dispose();
-      this.mesh.material.dispose();
+      
+      // Dispose of car model resources if it's a loaded GLB model
+      if (this.carModel) {
+        this.mesh.traverse((node) => {
+          if (node.isMesh) {
+            if (node.geometry) {
+              node.geometry.dispose();
+            }
+            if (node.material) {
+              if (Array.isArray(node.material)) {
+                node.material.forEach(mat => mat.dispose());
+              } else {
+                node.material.dispose();
+              }
+            }
+          }
+        });
+        this.carModel = null;
+      } else {
+        // Dispose of fallback box geometry
+        if (this.mesh.geometry) {
+          this.mesh.geometry.dispose();
+        }
+        if (this.mesh.material) {
+          this.mesh.material.dispose();
+        }
+      }
+      
       this.mesh = null;
     }
+    
+    // Clear front wheel references
+    this.frontWheels = [];
+    this.steeringAngle = 0;
     
     if (this.nameTag) {
       removeObjectFromScene(this.nameTag);
@@ -537,12 +924,21 @@ export class PlayerManager {
   }
   
   // Create a new player
-  createPlayer(id, name, position = { x: 0, y: 0, z: 0 }, isLocal = false) {
+  async createPlayer(id, name, position = { x: 0, y: 0, z: 0 }, isLocal = false) {
     const player = new Player(id, name, position, isLocal);
     this.players.set(id, player);
     
     if (isLocal) {
       this.localPlayer = player;
+    }
+    
+    // Wait for the mesh to be created (async model loading)
+    try {
+      await player.createMesh();
+      console.log(`Player mesh created successfully: ${name}`);
+    } catch (error) {
+      console.error(`Failed to create player mesh for ${name}:`, error);
+      // Player will already have fallback mesh from createMesh error handling
     }
     
     return player;
@@ -625,7 +1021,7 @@ export class PlayerManager {
   }
 
   // Step 5.2: Sync players with server game state
-  syncWithGameState(gameState, localPlayerId = null) {
+  async syncWithGameState(gameState, localPlayerId = null) {
     if (!gameState || !gameState.players) {
       return;
     }
@@ -633,7 +1029,7 @@ export class PlayerManager {
     const serverPlayerIds = new Set();
 
     // Update or create players from server data
-    gameState.players.forEach(serverPlayer => {
+    for (const serverPlayer of gameState.players) {
       serverPlayerIds.add(serverPlayer.id);
       
       const existingPlayer = this.players.get(serverPlayer.id);
@@ -668,7 +1064,7 @@ export class PlayerManager {
         existingPlayer.updateAliveStatus(serverPlayer.isAlive);
       } else {
         // Create new player
-        const newPlayer = this.createPlayer(
+        const newPlayer = await this.createPlayer(
           serverPlayer.id,
           serverPlayer.name,
           serverPlayer.position,
@@ -690,7 +1086,7 @@ export class PlayerManager {
           }
         }
       }
-    });
+    }
 
     // Remove players that are no longer on server (disconnected)
     const playersToRemove = [];
@@ -722,3 +1118,94 @@ export class PlayerManager {
 
 // Export singleton instance for global use
 export const playerManager = new PlayerManager();
+
+// Export car configuration for use in other modules
+export { CAR_CONFIG };
+
+/**
+ * Helper function to create a scaled version of the car configuration
+ * Useful when you want to experiment with different car sizes
+ * 
+ * @param {number} newScale - The new scale factor for the car
+ * @returns {object} A new configuration object with scaled values
+ * 
+ * Example:
+ * const smallCarConfig = createScaledCarConfig(1.5);
+ * const bigCarConfig = createScaledCarConfig(3.0);
+ */
+export function createScaledCarConfig(newScale) {
+  const scaleFactor = newScale / CAR_CONFIG.SCALE;
+  
+  return {
+    ...CAR_CONFIG,
+    SCALE: newScale,
+    NAME_TAG_HEIGHT: CAR_CONFIG.NAME_TAG_HEIGHT * scaleFactor,
+    WEAPON_POSITION: {
+      x: CAR_CONFIG.WEAPON_POSITION.x * scaleFactor,
+      y: CAR_CONFIG.WEAPON_POSITION.y * scaleFactor,
+      z: CAR_CONFIG.WEAPON_POSITION.z * scaleFactor
+    },
+    MISSILE_SPAWN_OFFSET: {
+      x: CAR_CONFIG.MISSILE_SPAWN_OFFSET.x * scaleFactor,
+      y: CAR_CONFIG.MISSILE_SPAWN_OFFSET.y * scaleFactor,
+      z: CAR_CONFIG.MISSILE_SPAWN_OFFSET.z * scaleFactor
+    },
+    FRONT_WHEEL: {
+      ...CAR_CONFIG.FRONT_WHEEL,
+      // Note: FRONT_THRESHOLD is string-based ('auto', 'high', 'low'), so no scaling needed
+      FRONT_THRESHOLD: CAR_CONFIG.FRONT_WHEEL.FRONT_THRESHOLD
+    }
+  };
+}
+
+// Debug function to switch front wheel detection for testing
+// Usage in browser console: switchWheelDetection('low') or switchWheelDetection('high')
+if (typeof window !== 'undefined') {
+  window.switchWheelDetection = function(mode = 'auto') {
+    if (!['auto', 'high', 'low'].includes(mode)) {
+      console.log('❌ Invalid mode. Use: "auto", "high", or "low"');
+      return;
+    }
+    
+    // Update the configuration
+    CAR_CONFIG.FRONT_WHEEL.FRONT_THRESHOLD = mode;
+    console.log(`🛞 Switched front wheel detection to: ${mode}`);
+    
+    // Re-detect wheels for all players
+    playerManager.getAllPlayers().forEach(player => {
+      if (player.carModel) {
+        console.log(`🔄 Re-detecting wheels for player: ${player.name}`);
+        player.findFrontWheels(player.carModel.scene);
+      }
+    });
+    
+    console.log('🛞 Wheel re-detection complete. Try steering to see the change!');
+    console.log('💡 If wheels still don\'t look right, try the other mode: switchWheelDetection(\'' + 
+                (mode === 'low' ? 'high' : 'low') + '\')');
+  };
+
+  // Debug function to show car part coloring breakdown
+  window.showCarPartColors = function() {
+    console.log('🎨 Race Car Part Color Scheme:');
+    console.log('🛞 TIRES:', `#${CAR_CONFIG.RACE_CAR_PARTS.TIRES.COLOR.toString(16).padStart(6, '0')}`, `(${CAR_CONFIG.RACE_CAR_PARTS.TIRES.MATERIAL_TYPE})`);
+    console.log('🚗 BODY (Local):', `#${CAR_CONFIG.RACE_CAR_PARTS.BODY.LOCAL_COLOR.toString(16).padStart(6, '0')}`, `(${CAR_CONFIG.RACE_CAR_PARTS.BODY.MATERIAL_TYPE})`);
+    console.log('🚗 BODY (Remote):', `#${CAR_CONFIG.RACE_CAR_PARTS.BODY.REMOTE_COLOR.toString(16).padStart(6, '0')}`, `(${CAR_CONFIG.RACE_CAR_PARTS.BODY.MATERIAL_TYPE})`);
+    console.log('🪶 WINGS (Local):', `#${CAR_CONFIG.RACE_CAR_PARTS.WINGS.LOCAL_COLOR.toString(16).padStart(6, '0')}`, `(${CAR_CONFIG.RACE_CAR_PARTS.WINGS.MATERIAL_TYPE})`);
+    console.log('🪶 WINGS (Remote):', `#${CAR_CONFIG.RACE_CAR_PARTS.WINGS.REMOTE_COLOR.toString(16).padStart(6, '0')}`, `(${CAR_CONFIG.RACE_CAR_PARTS.WINGS.MATERIAL_TYPE})`);
+    console.log('🔧 DETAILS:', `#${CAR_CONFIG.RACE_CAR_PARTS.DETAILS.COLOR.toString(16).padStart(6, '0')}`, `(${CAR_CONFIG.RACE_CAR_PARTS.DETAILS.MATERIAL_TYPE})`);
+    console.log('🪟 GLASS:', `#${CAR_CONFIG.RACE_CAR_PARTS.GLASS.COLOR.toString(16).padStart(6, '0')}`, `(${CAR_CONFIG.RACE_CAR_PARTS.GLASS.MATERIAL_TYPE}, ${CAR_CONFIG.RACE_CAR_PARTS.GLASS.OPACITY * 100}% opacity)`);
+  };
+
+  // Debug function to recolor all cars (useful for testing)
+  window.recolorAllCars = function() {
+    console.log('🎨 Recoloring all cars...');
+    playerManager.getAllPlayers().forEach(player => {
+      if (player.carModel) {
+        console.log(`🔄 Recoloring car for player: ${player.name}`);
+        modelLoader.setRaceCarColors(player.carModel, player.isLocal, CAR_CONFIG.RACE_CAR_PARTS);
+        player.updateNameTagTexture(); // Update name tag color too
+      }
+    });
+    console.log('✅ All cars recolored successfully!');
+  };
+}
