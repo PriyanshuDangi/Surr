@@ -169,6 +169,16 @@ export class Player {
     this.frontWheels = []; // Array of front wheel objects
     this.steeringAngle = 0; // Current steering angle
     
+    // Collision detection
+    this.boundingBox = new THREE.Box3();
+    this.collisionSize = {
+      width: CAR_CONFIG.FALLBACK_BOX_SIZE.width * CAR_CONFIG.SCALE,
+      height: CAR_CONFIG.FALLBACK_BOX_SIZE.height * CAR_CONFIG.SCALE,
+      depth: CAR_CONFIG.FALLBACK_BOX_SIZE.depth * CAR_CONFIG.SCALE
+    };
+    this.lastCollisionTime = 0;
+    this.collisionCooldown = 500; // 500ms cooldown between collisions
+    
     // Initialize visual representation
     // Note: createMesh() is now called asynchronously in PlayerManager.createPlayer()
     this.createNameTag();
@@ -423,6 +433,48 @@ export class Player {
     });
   }
   
+  // Update bounding box for collision detection
+  updateBoundingBox() {
+    if (!this.mesh) return;
+    
+    // Create bounding box around the car's current position
+    const halfWidth = this.collisionSize.width / 2;
+    const halfHeight = this.collisionSize.height / 2;
+    const halfDepth = this.collisionSize.depth / 2;
+    
+    this.boundingBox.setFromCenterAndSize(
+      this.position,
+      new THREE.Vector3(this.collisionSize.width, this.collisionSize.height, this.collisionSize.depth)
+    );
+  }
+  
+
+  
+  // Check if movement would cause collision
+  wouldCollideAfterMovement(deltaTime, playerManager) {
+    if (!this.isLocal || !this.isAlive || !playerManager) return false;
+    
+    // Calculate potential new position
+    const potentialMovement = this.direction.clone().multiplyScalar(this.speed * deltaTime);
+    const potentialPosition = this.position.clone().add(potentialMovement);
+    
+    // Check if this potential position would collide with any other player
+    const otherPlayers = playerManager.getAllPlayers();
+    for (const otherPlayer of otherPlayers) {
+      if (otherPlayer.id !== this.id && otherPlayer.isAlive) {
+        const distance = potentialPosition.distanceTo(otherPlayer.position);
+        const collisionDistance = (this.collisionSize.width + otherPlayer.collisionSize.width) / 2;
+        
+        if (distance < collisionDistance) {
+          console.log(`🚗🛑 Movement blocked - would collide with ${otherPlayer.name}`);
+          return true;
+        }
+      }
+    }
+    
+    return false;
+  }
+  
   // Create name tag above player
   createNameTag() {
     this.updateNameTagTexture();
@@ -647,7 +699,7 @@ export class Player {
   }
   
   // Update player movement based on input (Step 4.3)
-  updateMovement(inputState, deltaTime) {
+  updateMovement(inputState, deltaTime, playerManager = null) {
     if (!this.isLocal || !this.isAlive) return;
     
     // Handle turning
@@ -676,9 +728,18 @@ export class Player {
     this.direction.applyEuler(this.rotation);
     this.direction.normalize();
     
-    // Apply movement
-    const movement = this.direction.clone().multiplyScalar(this.speed * deltaTime);
-    this.position.add(movement);
+    // Check for collisions before applying movement
+    const wouldCollide = this.wouldCollideAfterMovement(deltaTime, playerManager);
+    
+    // Only apply movement if it won't cause a collision
+    if (!wouldCollide) {
+      const movement = this.direction.clone().multiplyScalar(this.speed * deltaTime);
+      this.position.add(movement);
+    } else {
+      // Stop the car if collision would occur
+      this.speed = 0;
+      this.targetSpeed = 0;
+    }
     
     // Keep player on ground level
     this.position.y = CAR_CONFIG.GROUND_LEVEL;
@@ -691,6 +752,9 @@ export class Player {
     if (this.mesh) {
       this.mesh.position.copy(this.position);
       this.mesh.rotation.copy(this.rotation);
+      
+      // Update bounding box for collision detection
+      this.updateBoundingBox();
     }
     
     // Update name tag position
@@ -893,6 +957,10 @@ export class Player {
     this.frontWheels = [];
     this.steeringAngle = 0;
     
+    // Clear collision data
+    this.boundingBox = null;
+    this.lastCollisionTime = 0;
+    
     if (this.nameTag) {
       removeObjectFromScene(this.nameTag);
       this.nameTag.material.map.dispose();
@@ -1012,12 +1080,45 @@ export class PlayerManager {
     return stats;
   }
   
+
+  
   // Update player score
   updatePlayerScore(id, score) {
     const player = this.players.get(id);
     if (player) {
       player.updateScore(score);
     }
+  }
+  
+  // Get collision statistics for debugging
+  getCollisionStats() {
+    const localPlayer = this.getLocalPlayer();
+    if (!localPlayer) return null;
+    
+    const stats = {
+      localPlayer: {
+        name: localPlayer.name,
+        position: localPlayer.position,
+        collisionSize: localPlayer.collisionSize
+      },
+      otherPlayers: []
+    };
+    
+    this.players.forEach((player, id) => {
+      if (player.id !== localPlayer.id) {
+        const distance = localPlayer.position.distanceTo(player.position);
+        const collisionDistance = (localPlayer.collisionSize.width + player.collisionSize.width) / 2;
+        stats.otherPlayers.push({
+          name: player.name,
+          position: player.position,
+          distance: distance.toFixed(2),
+          collisionThreshold: collisionDistance.toFixed(2),
+          wouldCollide: distance < collisionDistance
+        });
+      }
+    });
+    
+    return stats;
   }
 
   // Step 5.2: Sync players with server game state

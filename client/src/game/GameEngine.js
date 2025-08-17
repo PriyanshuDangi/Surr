@@ -184,16 +184,18 @@ function processInput(deltaTime) {
   
       // Update local player movement if exists
   if (localPlayer) {
-    localPlayer.updateMovement(input, deltaTime);
+    localPlayer.updateMovement(input, deltaTime, playerManager);
     
     // Add speed trail effects at high speeds
     const speed = Math.abs(localPlayer.speed);
     const normalizedSpeed = speed / localPlayer.maxSpeed;
     if (normalizedSpeed > 0.7 && Math.random() < 0.3) {
-      // Create speed trail behind the player
-      const trailPosition = localPlayer.position.clone();
-      trailPosition.y += 0.5;
-      trailPosition.z += 2; // Behind the car
+      // Calculate the rear position of the vehicle based on its rotation
+      const rearOffset = new THREE.Vector3(0, 0.5, 3); // Local space: behind and slightly up
+      const worldRearOffset = rearOffset.clone();
+      worldRearOffset.applyEuler(localPlayer.rotation);
+      
+      const trailPosition = localPlayer.position.clone().add(worldRearOffset);
       createSpeedTrail(trailPosition);
     }
     
@@ -586,4 +588,48 @@ window.debugInterpolation = function() {
   }
   
   return stats;
+};
+
+// Export function for debugging collision detection in browser console
+window.debugCollisions = function() {
+  const stats = playerManager.getCollisionStats();
+  console.log('🚗💥 Collision Detection Statistics:');
+  console.log(stats);
+  
+  if (!stats) {
+    console.log('No local player found. Join the game to test collision detection.');
+    return null;
+  }
+  
+  console.log(`Local player: ${stats.localPlayer.name}`);
+  console.log(`Position: (${stats.localPlayer.position.x.toFixed(2)}, ${stats.localPlayer.position.y.toFixed(2)}, ${stats.localPlayer.position.z.toFixed(2)})`);
+  console.log(`Other players: ${stats.otherPlayers.length}`);
+  
+  stats.otherPlayers.forEach((player, index) => {
+    const wouldCollideText = player.wouldCollide ? '⚠️ COLLISION ZONE' : '✅ Safe';
+    console.log(`  ${index + 1}. ${player.name} - Distance: ${player.distance} (Threshold: ${player.collisionThreshold}) ${wouldCollideText}`);
+  });
+  
+  return stats;
+};
+
+// Test collision by simulating movement toward nearest player
+window.testCollisionMovement = function() {
+  const localPlayer = playerManager.getLocalPlayer();
+  if (!localPlayer) {
+    console.log('No local player found.');
+    return;
+  }
+  
+  console.log('🧪 Testing collision movement prevention...');
+  console.log('This will simulate what happens when you try to move into another car.');
+  
+  const otherPlayers = playerManager.getAllPlayers().filter(p => p.id !== localPlayer.id);
+  if (otherPlayers.length === 0) {
+    console.log('No other players found to test collision with.');
+    return;
+  }
+  
+  const stats = playerManager.getCollisionStats();
+  console.table(stats.otherPlayers);
 };
