@@ -12,6 +12,7 @@ import { initMissileSystem, updateMissiles, disposeMissileSystem, setMissileHitC
 import { initRespawnTimer, showRespawnTimer, hideRespawnTimer, disposeRespawnTimer } from '../ui/RespawnTimer.js';
 import { initLeaderboard, updateLeaderboard, setLocalPlayerId, disposeLeaderboard } from '../ui/Leaderboard.js';
 import { initRoundTimer, updateRoundTimer, showRoundTransition, disposeRoundTimer } from '../ui/RoundTimer.js';
+import { initParticleEffects, updateParticleEffects, createSpeedTrail, createExplosion, disposeParticleEffects } from './ParticleEffects.js';
 import Stats from 'stats.js';
 import * as THREE from 'three';
 
@@ -22,10 +23,19 @@ let lastTime = 0;
 let deltaTime = 0;
 let stats = null;
 
-// Camera follow state
-let cameraOffset = new THREE.Vector3(0, 15, 20);
-let cameraLookAtOffset = new THREE.Vector3(0, 0, 0);
-let cameraFollowSpeed = 2.0;
+// Enhanced Dynamic Camera System
+let cameraOffset = new THREE.Vector3(0, 12, 18); // Closer for more action
+let cameraLookAtOffset = new THREE.Vector3(0, 2, 0); // Look slightly ahead
+let cameraFollowSpeed = 3.5; // Faster following
+let cameraShakeIntensity = 0;
+let cameraShakeDecay = 8.0;
+
+// Dynamic FOV settings
+const BASE_FOV = 75;
+const MAX_FOV = 90;
+const MIN_FOV = 65;
+let currentFOV = BASE_FOV;
+let targetFOV = BASE_FOV;
 
 // Initialize the game engine
 export async function initGameEngine() {
@@ -73,6 +83,9 @@ export async function initGameEngine() {
     
     // Step 2.4: Initialize round timer system
     initRoundTimer();
+    
+    // Initialize particle effects system
+    initParticleEffects();
     
     // Initialize websocket
     initWebSocket();
@@ -149,6 +162,9 @@ function gameLoop(currentTime = performance.now()) {
   // Step 7.1: Update missiles
   updateMissiles(deltaTime);
   
+  // Update particle effects
+  updateParticleEffects(deltaTime);
+  
   updateScene(deltaTime);
   renderScene();
 
@@ -166,9 +182,20 @@ function processInput(deltaTime) {
   const input = getInputState();
   const localPlayer = playerManager.getLocalPlayer();
   
-  // Update local player movement if exists
+      // Update local player movement if exists
   if (localPlayer) {
     localPlayer.updateMovement(input, deltaTime);
+    
+    // Add speed trail effects at high speeds
+    const speed = Math.abs(localPlayer.speed);
+    const normalizedSpeed = speed / localPlayer.maxSpeed;
+    if (normalizedSpeed > 0.7 && Math.random() < 0.3) {
+      // Create speed trail behind the player
+      const trailPosition = localPlayer.position.clone();
+      trailPosition.y += 0.5;
+      trailPosition.z += 2; // Behind the car
+      createSpeedTrail(trailPosition);
+    }
     
     // Step 6.3: Check for weapon pickup collisions (local player only)
     checkWeaponPickupCollision(localPlayer);
@@ -287,25 +314,58 @@ function handleMissileHit(hitResult) {
   }
 }
 
-// Update camera to follow local player (Step 4.3)
+// Enhanced dynamic camera system with speed-based FOV and positioning
 function updateCameraFollow(player, deltaTime) {
   const camera = getCamera();
   if (!camera) return;
   
+  // Get player speed for dynamic effects
+  const speed = Math.abs(player.speed);
+  const normalizedSpeed = Math.min(speed / player.maxSpeed, 1.0);
+  
+  // Dynamic FOV based on speed (like smashkarts.io)
+  targetFOV = BASE_FOV + (MAX_FOV - BASE_FOV) * normalizedSpeed * 0.8;
+  currentFOV += (targetFOV - currentFOV) * 4.0 * deltaTime;
+  camera.fov = currentFOV;
+  camera.updateProjectionMatrix();
+  
+  // Dynamic camera offset based on speed
+  const dynamicOffset = cameraOffset.clone();
+  // Pull camera back more at high speeds
+  dynamicOffset.z += normalizedSpeed * 8;
+  dynamicOffset.y += normalizedSpeed * 4;
+  
   // Calculate target camera position behind and above the player
   const targetPosition = player.position.clone();
-  const rotatedOffset = cameraOffset.clone();
+  const rotatedOffset = dynamicOffset.clone();
   rotatedOffset.applyEuler(player.rotation);
   targetPosition.add(rotatedOffset);
   
-  // Calculate target look-at position (slightly ahead of player)
+  // Calculate target look-at position (further ahead at high speeds)
   const targetLookAt = player.position.clone();
-  const lookAtOffset = cameraLookAtOffset.clone();
-  lookAtOffset.applyEuler(player.rotation);
-  targetLookAt.add(lookAtOffset);
+  const dynamicLookAtOffset = cameraLookAtOffset.clone();
+  // Look further ahead at high speeds
+  dynamicLookAtOffset.z -= normalizedSpeed * 6;
+  dynamicLookAtOffset.applyEuler(player.rotation);
+  targetLookAt.add(dynamicLookAtOffset);
   
-  // Smoothly interpolate camera position
-  camera.position.lerp(targetPosition, cameraFollowSpeed * deltaTime);
+  // Add subtle camera shake at high speeds
+  if (normalizedSpeed > 0.6) {
+    cameraShakeIntensity = Math.max(cameraShakeIntensity, (normalizedSpeed - 0.6) * 2.0);
+  }
+  
+  // Apply camera shake
+  if (cameraShakeIntensity > 0.01) {
+    const shakeX = (Math.random() - 0.5) * cameraShakeIntensity;
+    const shakeY = (Math.random() - 0.5) * cameraShakeIntensity;
+    targetPosition.x += shakeX;
+    targetPosition.y += shakeY;
+    cameraShakeIntensity = Math.max(0, cameraShakeIntensity - cameraShakeDecay * deltaTime);
+  }
+  
+  // Smoothly interpolate camera position with speed-based responsiveness
+  const followSpeed = cameraFollowSpeed + normalizedSpeed * 2.0;
+  camera.position.lerp(targetPosition, followSpeed * deltaTime);
   camera.lookAt(targetLookAt);
 }
 
@@ -360,6 +420,9 @@ export function disposeGameEngine() {
   
   // Dispose round timer (Step 2.4)
   disposeRoundTimer();
+  
+  // Dispose particle effects
+  disposeParticleEffects();
   
   // Dispose scene and stats
   disposeScene();

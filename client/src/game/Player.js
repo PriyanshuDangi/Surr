@@ -40,9 +40,9 @@ const CAR_CONFIG = {
   WEAPON_POSITION: { x: 0, y: 1.0, z: -3.0 },
   MISSILE_SPAWN_OFFSET: { x: 0, y: 1.5, z: -3.5 },
   
-  // Colors
-  LOCAL_PLAYER_COLOR: 0x4CAF50,  // Green
-  REMOTE_PLAYER_COLOR: 0xFF5722, // Orange
+  // Enhanced vibrant colors (inspired by smashkarts.io)
+  LOCAL_PLAYER_COLOR: 0x00E676,  // Bright electric green
+  REMOTE_PLAYER_COLOR: 0xFF3D00, // Bright red-orange
   
   // Fallback box dimensions (if GLB fails to load)
   FALLBACK_BOX_SIZE: { width: 2, height: 1, depth: 3 },
@@ -82,26 +82,26 @@ const CAR_CONFIG = {
       MATERIAL_TYPE: 'matte' // Matte finish for tires
     },
     
-    // Car body parts
+    // Car body parts - more vibrant colors
     BODY: {
       NAMES: ['body', 'chassis', 'hull', 'frame', 'car', 'vehicle'],
-      LOCAL_COLOR: 0xFF5722,  // Bright orange for local player body
-      REMOTE_COLOR: 0xFF7043, // Lighter orange for remote player body
+      LOCAL_COLOR: 0x00E676,  // Electric green for local player
+      REMOTE_COLOR: 0xFF1744, // Bright red for remote players
       MATERIAL_TYPE: 'metallic' // Metallic finish for body
     },
     
     // Wing/spoiler parts
     WINGS: {
       NAMES: ['wing', 'spoiler', 'aero', 'fin'],
-      LOCAL_COLOR: 0xE64A19,  // Darker orange for local player wings
-      REMOTE_COLOR: 0xFF5722, // Bright orange for remote player wings
+      LOCAL_COLOR: 0x00C853,  // Darker green for local player wings
+      REMOTE_COLOR: 0xD50000, // Dark red for remote player wings
       MATERIAL_TYPE: 'metallic'
     },
     
-    // Detail parts (bumpers, mirrors, etc.)
+    // Detail parts (bumpers, mirrors, etc.) - more contrast
     DETAILS: {
       NAMES: ['bumper', 'mirror', 'light', 'headlight', 'taillight', 'detail'],
-      COLOR: 0x424242, // Dark gray for details
+      COLOR: 0x212121, // Darker for better contrast
       MATERIAL_TYPE: 'plastic'
     },
     
@@ -115,8 +115,8 @@ const CAR_CONFIG = {
     
     // Default fallback for unidentified parts
     DEFAULT: {
-      LOCAL_COLOR: 0x4CAF50,  // Standard green
-      REMOTE_COLOR: 0xFF5722, // Standard orange
+      LOCAL_COLOR: 0x00E676,  // Bright electric green
+      REMOTE_COLOR: 0xFF1744, // Bright red
       MATERIAL_TYPE: 'standard'
     }
   }

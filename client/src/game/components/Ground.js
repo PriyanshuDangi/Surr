@@ -21,7 +21,7 @@ export function createGroundPlane(config = {}) {
   // Create ground plane geometry
   const groundGeometry = new THREE.PlaneGeometry(size, size);
   
-  // Load texture
+  // Load and enhance texture
   const loader = new THREE.TextureLoader();
   const texture = loader.load('/assets/images/stone_silver.png');
   texture.wrapS = THREE.RepeatWrapping;
@@ -30,11 +30,14 @@ export function createGroundPlane(config = {}) {
   texture.anisotropy = 16;
   texture.encoding = THREE.sRGBEncoding;
   
-  // Create ground material with texture
+  // Enhanced ground material with better visuals
   const groundMaterial = new THREE.MeshPhongMaterial({ 
     map: texture, 
-    shininess: 2, 
-    color: '#fff' 
+    shininess: 20,
+    specular: 0x222222,
+    color: 0xE8F5E8, // Slight green tint for better atmosphere
+    bumpMap: texture,
+    bumpScale: 0.1
   });
   
   // Create ground mesh

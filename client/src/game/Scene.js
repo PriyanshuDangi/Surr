@@ -31,24 +31,40 @@ function setupRenderer() {
   renderer = new THREE.WebGLRenderer({
     canvas: canvas,
     antialias: true,
-    alpha: false
+    alpha: false,
+    powerPreference: 'high-performance'
   });
   
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setClearColor(0x87CEEB); // Sky blue color
   
+  // Enhanced sky gradient background
+  renderer.setClearColor(0x4FC3F7); // Brighter sky blue
+  
+  // Enhanced shadow settings
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   
-  console.log('Renderer initialized');
+  // Enhanced rendering settings
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.2;
+  
+  console.log('Enhanced renderer initialized');
 }
 
 function setupScene() {
   scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(0x87CEEB, 50, 200); // Sky blue fog to match sky
   
-  console.log('Scene created');
+  // Enhanced fog with better visibility
+  scene.fog = new THREE.Fog(0x4FC3F7, 80, 300); // Brighter fog, longer distance
+  
+  // Add background skybox effect
+  const skyColor = new THREE.Color(0x4FC3F7);
+  const groundColor = new THREE.Color(0x81C784);
+  scene.background = skyColor;
+  
+  console.log('Enhanced scene created');
 }
 
 function setupCamera() {
@@ -67,37 +83,47 @@ function setupCamera() {
 }
 
 function setupLighting() {
-  // Brighter ambient light for overall scene illumination
-  const ambientLight = new THREE.AmbientLight(0x606060, 0.6);
+  // Enhanced ambient lighting for vibrant look
+  const ambientLight = new THREE.AmbientLight(0x404040, 0.8);
   scene.add(ambientLight);
 
-  // Brighter directional light (main sun light)
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 1.4);
-  directionalLight.position.set(50, 50, 50);
+  // Main sun light - brighter and warmer
+  const directionalLight = new THREE.DirectionalLight(0xFFF8DC, 1.8);
+  directionalLight.position.set(60, 80, 40);
   directionalLight.castShadow = true;
   
-  directionalLight.shadow.mapSize.width = 2048;
-  directionalLight.shadow.mapSize.height = 2048;
+  // Enhanced shadow quality
+  directionalLight.shadow.mapSize.width = 4096;
+  directionalLight.shadow.mapSize.height = 4096;
   directionalLight.shadow.camera.near = 0.5;
-  directionalLight.shadow.camera.far = 200;
-  directionalLight.shadow.camera.left = -100;
-  directionalLight.shadow.camera.right = 100;
-  directionalLight.shadow.camera.top = 100;
-  directionalLight.shadow.camera.bottom = -100;
+  directionalLight.shadow.camera.far = 300;
+  directionalLight.shadow.camera.left = -150;
+  directionalLight.shadow.camera.right = 150;
+  directionalLight.shadow.camera.top = 150;
+  directionalLight.shadow.camera.bottom = -150;
+  directionalLight.shadow.bias = -0.0001;
   
   scene.add(directionalLight);
 
-  // Brighter point light for additional illumination
-  const pointLight = new THREE.PointLight(0x6ba0f2, 0.8, 120);
-  pointLight.position.set(0, 30, 0);
-  scene.add(pointLight);
+  // Dynamic colored point lights for atmosphere
+  const pointLight1 = new THREE.PointLight(0xFF6B35, 1.2, 100);
+  pointLight1.position.set(40, 25, 40);
+  scene.add(pointLight1);
   
-  // Additional fill light to reduce harsh shadows
-  const fillLight = new THREE.DirectionalLight(0x87CEEB, 0.3);
-  fillLight.position.set(-30, 20, -30);
-  scene.add(fillLight);
+  const pointLight2 = new THREE.PointLight(0x4ECDC4, 1.0, 100);
+  pointLight2.position.set(-40, 25, -40);
+  scene.add(pointLight2);
   
-  console.log('Enhanced lighting setup complete');
+  // Rim lighting for better object definition
+  const rimLight = new THREE.DirectionalLight(0xE1F5FE, 0.8);
+  rimLight.position.set(-50, 30, -50);
+  scene.add(rimLight);
+  
+  // Hemisphere light for realistic sky illumination
+  const hemisphereLight = new THREE.HemisphereLight(0x4FC3F7, 0x81C784, 0.5);
+  scene.add(hemisphereLight);
+  
+  console.log('Advanced lighting system initialized');
 }
 
 function setupArena() {
@@ -119,10 +145,12 @@ function createArenaWalls() {
   const wallThickness = 1;
   const arenaSize = 100;
   
-  const wallMaterial = new THREE.MeshLambertMaterial({ 
-    color: 0x7f8c8d,
+  const wallMaterial = new THREE.MeshPhongMaterial({ 
+    color: 0x546E7A,
     transparent: true,
-    opacity: 0.7
+    opacity: 0.8,
+    shininess: 30,
+    specular: 0x445566
   });
 
   const wallPositions = [

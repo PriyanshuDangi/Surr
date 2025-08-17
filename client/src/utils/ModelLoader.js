@@ -217,21 +217,26 @@ class ModelLoader {
         material.color.setHex(color);
       }
       
-      // Apply material properties based on type
+      // Enhanced material properties for better visuals
       switch (partInfo.materialType) {
         case 'metallic':
-          if (material.metalness !== undefined) material.metalness = 0.7;
-          if (material.roughness !== undefined) material.roughness = 0.2;
+          if (material.metalness !== undefined) material.metalness = 0.9;
+          if (material.roughness !== undefined) material.roughness = 0.1;
+          if (material.emissive !== undefined) material.emissive.setHex(0x111111);
+          if (material.envMapIntensity !== undefined) material.envMapIntensity = 1.0;
           break;
           
         case 'matte':
           if (material.metalness !== undefined) material.metalness = 0.0;
-          if (material.roughness !== undefined) material.roughness = 0.9;
+          if (material.roughness !== undefined) material.roughness = 1.0;
+          if (material.emissive !== undefined) material.emissive.setHex(0x000000);
           break;
           
         case 'plastic':
           if (material.metalness !== undefined) material.metalness = 0.0;
-          if (material.roughness !== undefined) material.roughness = 0.6;
+          if (material.roughness !== undefined) material.roughness = 0.3;
+          if (material.clearcoat !== undefined) material.clearcoat = 0.8;
+          if (material.clearcoatRoughness !== undefined) material.clearcoatRoughness = 0.1;
           break;
           
         case 'glass':
@@ -239,13 +244,16 @@ class ModelLoader {
           if (material.roughness !== undefined) material.roughness = 0.0;
           if (material.transparent !== undefined) {
             material.transparent = true;
-            material.opacity = partInfo.opacity || 0.8;
+            material.opacity = partInfo.opacity || 0.7;
           }
+          if (material.transmission !== undefined) material.transmission = 0.9;
+          if (material.ior !== undefined) material.ior = 1.5;
           break;
           
         default: // 'standard'
-          if (material.metalness !== undefined) material.metalness = 0.3;
-          if (material.roughness !== undefined) material.roughness = 0.5;
+          if (material.metalness !== undefined) material.metalness = 0.4;
+          if (material.roughness !== undefined) material.roughness = 0.4;
+          if (material.emissive !== undefined) material.emissive.setHex(0x050505);
           break;
       }
       
